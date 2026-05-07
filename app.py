@@ -9,7 +9,7 @@ from firebase_admin import credentials, firestore
 st.set_page_config(page_title="Hartur IA", page_icon="🤖")
 
 # =========================
-# FIREBASE SAFE INIT
+# FIREBASE INIT SAFE
 # =========================
 db = None
 
@@ -28,14 +28,19 @@ if db is None and firebase_admin._apps:
 
 
 # =========================
-# IA
+# API KEY
 # =========================
 api_key = st.secrets.get("MISTRAL_KEY", "")
 
+
+# =========================
+# 🤖 IA (FIX STABLE)
+# =========================
 def appeler_mistral(prompt):
 
     p = prompt.lower()
 
+    # 👑 CREATOR FIX
     if "créateur" in p or "createur" in p:
         return "Je suis une création de Zacharie Pays."
 
@@ -49,14 +54,17 @@ def appeler_mistral(prompt):
             json={
                 "model": "open-mistral-7b",
                 "messages": [
-                    {"role": "system", "content": "IA simple et utile."},
+                    {"role": "system", "content": "Tu es Hartur, une IA simple, fluide et utile."},
                     {"role": "user", "content": prompt}
                 ],
                 "temperature": 0.7
-            }
+            },
+            timeout=20
         )
 
-        return r.json()["choices"][0]["message"]["content"]
+        data = r.json()
+
+        return data.get("choices", [{}])[0].get("message", {}).get("content", "Erreur IA")
 
     except:
         return "Erreur IA"
@@ -69,7 +77,7 @@ menu = st.sidebar.selectbox("Menu", ["Chat", "Admin"])
 
 
 # =========================
-# 💬 CHAT
+# 💬 CHAT FIXÉ
 # =========================
 if menu == "Chat":
 
@@ -85,11 +93,12 @@ if menu == "Chat":
 
     else:
 
-        st.subheader(st.session_state.nom)
+        st.subheader(f"Bienvenue {st.session_state.nom} 👋")
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
 
+        # affichage chat
         for m in st.session_state.messages:
             with st.chat_message(m["role"]):
                 st.write(m["content"])
@@ -98,12 +107,21 @@ if menu == "Chat":
 
         if prompt:
 
-            st.session_state.messages.append({"role": "user", "content": prompt})
+            # user
+            st.session_state.messages.append({
+                "role": "user",
+                "content": prompt
+            })
 
+            # IA
             rep = appeler_mistral(prompt)
 
-            st.session_state.messages.append({"role": "assistant", "content": rep})
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": rep
+            })
 
+            # FIREBASE SAVE
             if db:
                 db.collection("discussions").add({
                     "nom": st.session_state.nom,
@@ -111,9 +129,12 @@ if menu == "Chat":
                     "reponse": rep
                 })
 
+            # 🔥 IMPORTANT FIX AFFICHAGE
+            st.rerun()
+
 
 # =========================
-# 🔐 ADMIN PANEL (CARDS + CHAT VIEW)
+# 🔐 ADMIN FIX + CARDS + CHAT
 # =========================
 else:
 
@@ -122,6 +143,7 @@ else:
     if "admin" not in st.session_state:
         st.session_state.admin = False
 
+    # LOGIN
     if not st.session_state.admin:
 
         pwd = st.text_input("Mot de passe", type="password")
@@ -131,7 +153,7 @@ else:
                 st.session_state.admin = True
                 st.rerun()
             else:
-                st.error("Erreur mot de passe")
+                st.error("Mot de passe incorrect")
 
         st.stop()
 
@@ -153,7 +175,7 @@ else:
 
 
     # =========================
-    # STATE
+    # STATE USER SELECT
     # =========================
     if "selected_user" not in st.session_state:
         st.session_state.selected_user = None
@@ -185,7 +207,7 @@ else:
 
         nom = st.session_state.selected_user
 
-        st.subheader(f"💬 {nom}")
+        st.subheader(f"💬 Conversation : {nom}")
 
         if st.button("⬅ Retour"):
             st.session_state.selected_user = None
@@ -195,6 +217,6 @@ else:
 
         for c in conv:
 
-            st.markdown(f"👤 {c.get('texte','')}")
-            st.markdown(f"🤖 {c.get('reponse','')}")
+            st.markdown(f"👤 **User :** {c.get('texte','')}")
+            st.markdown(f"🤖 **IA :** {c.get('reponse','')}")
             st.divider()
