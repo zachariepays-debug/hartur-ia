@@ -2,223 +2,154 @@ import streamlit as st
 import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
+from datetime import datetime
 
-# =========================
-# CONFIG
-# =========================
+# --- CONFIGURATION ---
 st.set_page_config(page_title="Hartur IA", page_icon="🤖")
 
-# =========================
-# FIREBASE INIT SAFE
-# =========================
-db = None
-
+# --- FIREBASE ---
 if not firebase_admin._apps:
     try:
-        cred = credentials.Certificate(
-            "arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json"
-        )
+        cred = credentials.Certificate('arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json')
         firebase_admin.initialize_app(cred)
-        db = firestore.client()
-    except:
-        st.error("Erreur Firebase")
+    except Exception as e:
+        st.error(f"Erreur Firebase : {e}")
 
-if db is None and firebase_admin._apps:
-    db = firestore.client()
+db = firestore.client()
 
-
-# =========================
-# API KEY
-# =========================
-api_key = st.secrets.get("MISTRAL_KEY", "")
+# --- MISTRAL ---
+try:
+    api_key = st.secrets["MISTRAL_KEY"]
+except:
+    api_key = "TA_CLE_POUR_TEST_LOCAL"
 
 
-# =========================
-# 🤖 IA ULTRA FIX RAPIDE
-# =========================
 def appeler_mistral(prompt):
-
     p = prompt.lower()
 
-    # 👑 CREATOR FIX
-    if "créateur" in p or "createur" in p:
-        return "Je suis une création de Zacharie Pays."
+    if any(word in p for word in ["créateur", "createur", "qui t'a fait", "qui t'a créé"]):
+        return "C'est Zacharie Pays qui m'a créé. C'est lui le boss, il gère de fou !"
+
+    url = "https://api.mistral.ai/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    instructions = "Tu es Hartur. Parle comme un ado cool, naturel et sympa."
+
+    data = {
+        "model": "open-mistral-7b",
+        "messages": [
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.8
+    }
 
     try:
-        with st.spinner("🤖 Hartur réfléchit..."):
-
-            r = requests.post(
-                "https://api.mistral.ai/v1/chat/completions",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                },
-                json={
-                    "model": "open-mistral-7b",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "Réponses rapides, claires et courtes."
-                        },
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.6
-                },
-                timeout=7  # 🔥 FIX LAG
-            )
-
-        data = r.json()
-
-        return data.get("choices", [{}])[0].get("message", {}).get("content", "Erreur IA")
-
+        response = requests.post(url, headers=headers, json=data)
+        return response.json()['choices'][0]['message']['content']
     except:
-        return "⚠️ IA lente ou indisponible"
+        return "Désolé, j'ai un bug technique !"
 
 
-# =========================
-# MENU
-# =========================
-menu = st.sidebar.selectbox("Menu", ["Chat", "Admin"])
+# --- NAVIGATION ---
+menu = st.sidebar.selectbox("Navigation", ["💬 Discussion", "🔐 Admin"])
 
 
-# =========================
-# 💬 CHAT FIXÉ
-# =========================
-if menu == "Chat":
-
+# ======================================================
+# 💬 DISCUSSION
+# ======================================================
+if menu == "💬 Discussion":
     st.title("🤖 Hartur IA")
 
     if "nom" not in st.session_state:
-        nom = st.text_input("Ton nom ?")
-
-        if st.button("Go") and nom:
-            st.session_state.nom = nom
-            st.session_state.messages = []
-            st.rerun()
+        nom = st.text_input("Ton prénom ou pseudo")
+        if st.button("Entrer"):
+            if nom.strip() != "":
+                st.session_state.nom = nom
+                st.session_state.messages = []
+                st.rerun()
 
     else:
-
-        st.subheader(f"Bienvenue {st.session_state.nom} 👋")
+        st.success(f"Connecté en tant que : {st.session_state.nom}")
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
 
-        # affichage chat
         for m in st.session_state.messages:
             with st.chat_message(m["role"]):
-                st.write(m["content"])
+                st.markdown(m["content"])
 
-        prompt = st.chat_input("Message...")
+        prompt = st.chat_input("Écris ton message...")
 
         if prompt:
+            # USER
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
 
-            st.session_state.messages.append({
-                "role": "user",
-                "content": prompt
+            # IA
+            reponse = appeler_mistral(prompt)
+
+            with st.chat_message("assistant"):
+                st.markdown(reponse)
+
+            st.session_state.messages.append({"role": "assistant", "content": reponse})
+
+            # --- FIREBASE SAVE ---
+            db.collection("discussions").add({
+                "nom": st.session_state.nom,
+                "texte": prompt,
+                "reponse": reponse,
+                "date": datetime.utcnow()
             })
 
-            # 🤖 IA (plus rapide maintenant)
-            rep = appeler_mistral(prompt)
 
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": rep
-            })
+# ======================================================
+# 🔐 ADMIN
+# ======================================================
+elif menu == "🔐 Admin":
+    st.title("🔐 Espace Admin")
 
-            # FIREBASE SAVE
-            if db:
-                db.collection("discussions").add({
-                    "nom": st.session_state.nom,
-                    "texte": prompt,
-                    "reponse": rep
-                })
+    pwd = st.text_input("Mot de passe :", type="password")
 
-            st.rerun()
+    if pwd == "babar":
 
+        st.success("Accès autorisé")
 
-# =========================
-# 🔐 ADMIN (CARDS + CHAT)
-# =========================
-else:
+        # récupérer toutes les discussions
+        docs = db.collection("discussions").stream()
 
-    st.title("🔐 Admin Panel")
+        conversations = {}
 
-    if "admin" not in st.session_state:
-        st.session_state.admin = False
+        for d in docs:
+            data = d.to_dict()
+            nom = data.get("nom", "Inconnu")
 
-    if not st.session_state.admin:
+            if nom not in conversations:
+                conversations[nom] = []
 
-        pwd = st.text_input("Mot de passe", type="password")
+            conversations[nom].append(data)
 
-        if st.button("Connexion"):
-            if pwd == st.secrets.get("ADMIN_PASS", "babar"):
-                st.session_state.admin = True
-                st.rerun()
-            else:
-                st.error("Mot de passe incorrect")
+        st.subheader("📁 Utilisateurs connectés")
 
-        st.stop()
+        for nom, msgs in conversations.items():
 
+            if st.button(f"👤 {nom}"):
+                st.session_state["selected_user"] = nom
 
-    # =========================
-    # LOAD DATA
-    # =========================
-    docs = db.collection("discussions").stream()
+        # affichage conversation sélectionnée
+        if "selected_user" in st.session_state:
+            user = st.session_state["selected_user"]
 
-    users = {}
+            st.markdown(f"## 💬 Conversation de {user}")
 
-    for d in docs:
-        x = d.to_dict()
-        if not x:
-            continue
+            for m in conversations[user]:
+                st.write(f"❓ **User :** {m['texte']}")
+                st.write(f"🤖 **Hartur :** {m['reponse']}")
+                st.divider()
 
-        nom = x.get("nom", "Inconnu")
-        users.setdefault(nom, []).append(x)
-
-
-    # =========================
-    # STATE
-    # =========================
-    if "selected_user" not in st.session_state:
-        st.session_state.selected_user = None
-
-
-    # =========================
-    # VIEW 1 : CARDS
-    # =========================
-    if st.session_state.selected_user is None:
-
-        st.subheader("👤 Utilisateurs")
-
-        cols = st.columns(3)
-
-        for i, (nom, conv) in enumerate(users.items()):
-
-            with cols[i % 3]:
-
-                if st.button(f"📦 {nom}\n({len(conv)} msgs)"):
-
-                    st.session_state.selected_user = nom
-                    st.rerun()
-
-
-    # =========================
-    # VIEW 2 : CONVERSATION
-    # =========================
-    else:
-
-        nom = st.session_state.selected_user
-
-        st.subheader(f"💬 {nom}")
-
-        if st.button("⬅ Retour"):
-            st.session_state.selected_user = None
-            st.rerun()
-
-        conv = users.get(nom, [])
-
-        for c in conv:
-
-            st.markdown(f"👤 {c.get('texte','')}")
-            st.markdown(f"🤖 {c.get('reponse','')}")
-            st.divider()
+    elif pwd:
+        st.error("Mauvais mot de passe")
