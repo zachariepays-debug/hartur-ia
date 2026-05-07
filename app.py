@@ -6,82 +6,84 @@ from firebase_admin import credentials, firestore
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Hartur IA", page_icon="🤖")
 
-# Connexion Firebase (Vérifie bien le nom du fichier .json)
+# Connexion Firebase
 if not firebase_admin._apps:
     try:
+        # Vérifie bien que ce nom de fichier est celui présent sur ton GitHub
         cred = credentials.Certificate("arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json")
         firebase_admin.initialize_app(cred)
     except Exception as e:
-        st.error(f"Erreur Firebase : {e}")
+        st.error(f"Erreur de certificat Firebase : {e}")
 
 db = firestore.client()
 
-# --- 2. TON IA ---
-instruction = "Tu es Hartur, un assistant poli et moderne. Réponds de façon amicale mais professionnelle."
+# --- 2. TON DE L'IA (Equilibré) ---
+instruction = "Tu es Hartur, un assistant poli et moderne. Réponds de façon claire et professionnelle."
 
 # --- 3. ADMIN ---
-st.sidebar.title("🔐 Administration")
-mot_de_passe_saisi = st.sidebar.text_input("Code secret", type="password")
-MOT_DE_PASSE_CORRECT = "1234" 
+st.sidebar.title("🔐 Admin")
+code_admin = st.sidebar.text_input("Code secret", type="password")
+CODE_VALIDE = "1234" 
 
 # --- 4. INTERFACE ---
 st.title("🤖 Hartur IA")
-nom_utilisateur = st.text_input("Comment t'appelles-tu ?")
+nom = st.text_input("Ton prénom :")
 
-if not nom_utilisateur:
-    st.info("👋 Bonjour ! Entre ton nom pour commencer.")
-else:
+if nom:
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    for msg in st.session_state.messages:
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
 
     if prompt := st.chat_input("Ta question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # --- LE TEST CRITIQUE ICI ---
         try:
-            # On vérifie si la clé existe avant d'appeler
-            if "MISTRAL_KEY" not in st.secrets:
-                st.error("LA CLÉ MISTRAL_KEY EST ABSENTE DES SECRETS STREAMLIT !")
-            else:
-                api_key = st.secrets["MISTRAL_KEY"]
-                headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-                data = {
+            # Appel Mistral
+            key = st.secrets["MISTRAL_KEY"]
+            res = requests.post(
+                "https://api.mistral.ai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {key}"},
+                json={
                     "model": "mistral-tiny",
-                    "messages": [{"role": "system", "content": instruction}, {"role": "user", "content": prompt}]
-                }
+                    "messages": [
+                        {"role": "system", "content": instruction},
+                        {"role": "user", "content": prompt}
+                    ]
+                },
+                timeout=10
+            )
+            
+            if res.status_code == 200:
+                reponse = res.json()['choices'][0]['message']['content']
                 
-                # On lance l'appel
-                res = requests.post("https://api.mistral.ai/v1/chat/completions", json=data, headers=headers, timeout=15)
-                
-                if res.status_code == 200:
-                    reponse = res.json()['choices'][0]['message']['content']
-                    
-                    # Sauvegarde
+                # SAUVEGARDE (C'est ici que les règles Firebase comptent)
+                try:
                     db.collection("messages").add({
-                        "nom": nom_utilisateur,
+                        "nom": nom,
                         "question": prompt,
                         "reponse": reponse,
                         "date": firestore.SERVER_TIMESTAMP
                     })
-                    
-                    with st.chat_message("assistant"):
-                        st.markdown(reponse)
-                        st.session_state.messages.append({"role": "assistant", "content": reponse})
-                else:
-                    # SI CA REPOND PAS, ON DIT POURQUOI
-                    st.error(f"Mistral refuse : Code {res.status_code} - {res.text}")
+                except Exception as fire_err:
+                    st.warning("Message non sauvegardé (Vérifie tes règles Firebase).")
+                
+                with st.chat_message("assistant"):
+                    st.markdown(reponse)
+                    st.session_state.messages.append({"role": "assistant", "content": reponse})
+            else:
+                st.error(f"Erreur IA : {res.status_code}")
         except Exception as e:
-            st.error(f"L'application a crashé ici : {e}")
+            st.error(f"Erreur technique : {e}")
 
-# --- 5. HISTORIQUE ---
-if mot_de_passe_saisi == MOT_DE_PASSE_CORRECT:
+# --- 5. HISTORIQUE ADMIN ---
+if code_admin == CODE_VALIDE:
     st.divider()
+    st.subheader("📊 Historique")
     docs = db.collection("messages").order_by("date", direction=firestore.Query.DESCENDING).limit(10).stream()
     for doc in docs:
         d = doc.to_dict()
