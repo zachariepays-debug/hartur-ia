@@ -18,20 +18,25 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # --- MISTRAL ---
-api_key = st.secrets.get("MISTRAL_KEY", "TA_CLE_ICI")
+# Le code cherche la clé dans tes secrets Streamlit
+try:
+    api_key = st.secrets["MISTRAL_KEY"]
+except:
+    api_key = "TA_CLE_DE_SECOURS_ICI"
 
 def appeler_mistral(prompt):
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     data = {
         "model": "open-mistral-7b",
-        "messages": [{"role": "user", "content": prompt}]
+        "messages": [{"role": "system", "content": "Tu es Hartur, un ado cool."},
+                     {"role": "user", "content": prompt}]
     }
     try:
         response = requests.post(url, headers=headers, json=data)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Erreur de connexion à l'IA."
+        return "Petit bug avec l'IA."
 
 # --- NAVIGATION ---
 menu = st.sidebar.selectbox("Menu", ["💬 Discussion", "🔐 Admin"])
@@ -47,12 +52,12 @@ if menu == "💬 Discussion":
             st.session_state.nom = nom
             st.rerun()
     else:
-        prompt = st.chat_input("Dis moi un truc...")
+        prompt = st.chat_input("Dis-moi un truc...")
         if prompt:
             reponse = appeler_mistral(prompt)
             st.write(f"**Toi:** {prompt}")
             st.write(f"**Hartur:** {reponse}")
-            # Sauvegarde
+            # Sauvegarde dans Firebase
             db.collection("discussions").add({
                 "nom": st.session_state.nom,
                 "texte": prompt,
@@ -61,54 +66,53 @@ if menu == "💬 Discussion":
             })
 
 # ======================================================
-# 🔐 ADMIN (CORRIGÉ POUR AFFICHER LES MESSAGES)
+# 🔐 ADMIN (AFFICHAGE AUTOMATIQUE)
 # ======================================================
 elif menu == "🔐 Admin":
     st.title("🔐 Espace Admin")
 
-    # Initialisation de l'état de connexion si besoin
-    if "auth_admin" not in st.session_state:
-        st.session_state.auth_admin = False
+    if "admin_log" not in st.session_state:
+        st.session_state.admin_log = False
 
-    # Étape 1 : Formulaire de connexion (si pas connecté)
-    if not st.session_state.auth_admin:
+    # Formulaire si non connecté
+    if not st.session_state.admin_log:
         pwd = st.text_input("Mot de passe :", type="password")
         if st.button("Se connecter"):
             if pwd == "babar":
-                st.session_state.auth_admin = True
-                st.rerun() # Relance pour effacer le champ password
+                st.session_state.admin_log = True
+                st.rerun()
             else:
                 st.error("Mot de passe incorrect")
-
-    # Étape 2 : Affichage des données (si connecté)
+    
+    # Affichage des dossiers si connecté
     else:
-        st.sidebar.button("Déconnexion Admin", on_click=lambda: st.session_state.update({"auth_admin": False}))
+        st.sidebar.button("Quitter l'Admin", on_click=lambda: st.session_state.update({"admin_log": False}))
         
-        st.subheader("📁 Dossiers de conversations")
+        st.subheader("📂 Dossiers de conversations")
         
         try:
-            # Récupération de la collection "discussions"
+            # Récupération de TOUS les messages
             docs = list(db.collection("discussions").stream())
             
             if not docs:
-                st.info("Aucun message trouvé dans la base 'discussions'.")
+                st.info("Aucun message trouvé. Envoie un message dans 'Discussion' pour tester.")
             else:
                 convs = {}
                 for d in docs:
                     data = d.to_dict()
-                    u = data.get("nom", "Anonyme")
+                    u = data.get("nom", "Inconnu")
                     if u not in convs: convs[u] = []
                     convs[u].append(data)
 
-                # Création d'un menu déroulant par utilisateur
+                # Affichage par utilisateur
                 for user, messages in convs.items():
                     with st.expander(f"👤 {user} ({len(messages)} messages)"):
                         for m in reversed(messages):
-                            st.write(f"💬 **Message :** {m.get('texte')}")
-                            st.write(f"🤖 **Réponse :** {m.get('reponse')}")
+                            st.write(f"💬 **Lui:** {m.get('texte')}")
+                            st.write(f"🤖 **Hartur:** {m.get('reponse')}")
                             st.divider()
         except Exception as e:
-            st.error(f"Erreur de lecture Firebase : {e}")
+            st.error(f"Erreur Firebase : {e}")
 
-        if st.button("🔄 Rafraîchir les données"):
+        if st.button("🔄 Actualiser"):
             st.rerun()
