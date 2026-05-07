@@ -13,15 +13,22 @@ if not firebase_admin._apps:
         cred = credentials.Certificate('arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json')
         firebase_admin.initialize_app(cred)
     except Exception as e:
-        st.error(f"Erreur d'initialisation Firebase : {e}")
+        st.error(f"Erreur Firebase : {e}")
 
 db = firestore.client()
 
-# --- MISTRAL ---
-# REMPLACE BIEN "TA_CLE_MISTRAL_ICI" PAR TA VRAIE CLÉ
-api_key = "TA_CLE_MISTRAL_ICI" 
+# --- MISTRAL (Lecture depuis les Secrets) ---
+try:
+    # Ici, le script va lire la ligne MISTRAL_KEY que tu as mise sur ta photo
+    api_key = st.secrets["MISTRAL_KEY"]
+except Exception as e:
+    st.error("La clé MISTRAL_KEY est introuvable dans les Secrets Streamlit.")
+    api_key = None
 
 def appeler_mistral(prompt):
+    if not api_key:
+        return "Clé API absente."
+
     p = prompt.lower()
     if any(word in p for word in ["créateur", "createur", "qui t'a fait", "qui t'a créé"]):
         return "C'est Zacharie Pays qui m'a créé. C'est lui le boss, il gère de fou !"
@@ -47,11 +54,9 @@ def appeler_mistral(prompt):
         if "choices" in res_json:
             return res_json['choices'][0]['message']['content']
         else:
-            # Affiche l'erreur renvoyée par Mistral s'il y en a une
-            return f"Erreur Mistral : {res_json}"
+            return f"Erreur Mistral : {res_json.get('detail', res_json)}"
     except Exception as e:
-        # Affiche l'erreur technique précise
-        return f"Erreur technique précise : {e}"
+        return f"Erreur technique : {e}"
 
 # --- NAVIGATION ---
 menu = st.sidebar.selectbox("Navigation", ["💬 Discussion", "🔐 Admin"])
@@ -70,8 +75,8 @@ if menu == "💬 Discussion":
                 st.session_state.messages = []
                 st.rerun()
     else:
-        st.sidebar.write(f"Connecté : **{st.session_state.nom}**")
-        if st.sidebar.button("Se déconnecter"):
+        st.sidebar.write(f"Utilisateur : **{st.session_state.nom}**")
+        if st.sidebar.button("Déconnexion"):
             del st.session_state.nom
             st.rerun()
 
@@ -79,7 +84,7 @@ if menu == "💬 Discussion":
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
 
-        prompt = st.chat_input("Dis quelque chose...")
+        prompt = st.chat_input("Écris ton message...")
 
         if prompt:
             st.session_state.messages.append({"role": "user", "content": prompt})
@@ -91,7 +96,7 @@ if menu == "💬 Discussion":
                 st.markdown(reponse)
             st.session_state.messages.append({"role": "assistant", "content": reponse})
 
-            # Sauvegarde automatique vers Firebase
+            # Sauvegarde Firebase
             try:
                 db.collection("discussions").add({
                     "nom": st.session_state.nom,
@@ -120,16 +125,14 @@ elif menu == "🔐 Admin":
             else:
                 st.error("❌ Mot de passe incorrect")
     else:
-        if st.sidebar.button("Quitter l'Admin"):
+        if st.sidebar.button("Fermer l'Admin"):
             st.session_state.admin_auth = False
             st.rerun()
 
-        st.subheader("📁 Historique des conversations")
-        
         try:
             docs = list(db.collection("discussions").stream())
             if not docs:
-                st.info("Aucun message trouvé.")
+                st.info("Aucun message trouvé dans Firebase.")
             else:
                 conversations = {}
                 for d in docs:
@@ -142,11 +145,11 @@ elif menu == "🔐 Admin":
                 for user_name, msgs in conversations.items():
                     with st.expander(f"👤 {user_name} ({len(msgs)} messages)"):
                         for m in reversed(msgs):
-                            st.write(f"❓ **{user_name}:** {m.get('texte')}")
-                            st.write(f"🤖 **Hartur:** {m.get('reponse')}")
+                            st.write(f"💬 **Message :** {m.get('texte')}")
+                            st.write(f"🤖 **Hartur :** {m.get('reponse')}")
                             st.divider()
         except Exception as e:
-            st.error(f"Erreur Firebase : {e}")
+            st.error(f"Erreur de lecture Firebase : {e}")
 
         if st.button("🔄 Actualiser"):
             st.rerun()
