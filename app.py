@@ -94,7 +94,7 @@ elif menu == "Espace Admin":
     if not st.session_state.admin_logged_in:
         pwd = st.text_input("Mot de passe :", type="password")
         if st.button("Se connecter"):
-            if pwd == "babar":
+            if pwd == "zach":
                 st.session_state.admin_logged_in = True
                 st.rerun()
             else:
