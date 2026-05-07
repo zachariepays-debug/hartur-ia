@@ -6,110 +6,87 @@ from firebase_admin import credentials, firestore
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Hartur IA", page_icon="🤖")
 
-# Connexion Firebase (Vérification de sécurité)
+# Connexion Firebase (Vérifie bien que le nom du fichier .json est le même sur ton GitHub)
 if not firebase_admin._apps:
-    try:
-        # Vérifie que ce nom de fichier est exactement celui sur ton GitHub
-        cred = credentials.Certificate("arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json")
-        firebase_admin.initialize_app(cred)
-    except Exception as e:
-        st.error(f"Erreur de certificat : {e}")
+    cred = credentials.Certificate("arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json")
+    firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
-# --- 2. PERSONNALITÉ DE L'IA ---
-# Ton équilibré : amical et moderne, mais professionnel.
-instruction = "Tu es Hartur, un assistant IA poli et efficace. Ton ton est moderne mais reste toujours professionnel et clair."
+# --- 2. TON DE L'IA (Rectifié : Neutre et Poli) ---
+# J'ai retiré le côté "cool cool" pour quelque chose de plus équilibré.
+instruction = "Tu es Hartur, un assistant IA poli et moderne. Tu réponds de façon amicale mais professionnelle."
 
-# --- 3. BARRE LATÉRALE (ADMINISTRATION) ---
+# --- 3. BARRE LATÉRALE (ADMIN) ---
 st.sidebar.title("🔐 Administration")
-code_admin = st.sidebar.text_input("Code d'accès", type="password")
-MOT_DE_PASSE_CORRECT = "1234" # <--- MODIFIE TON CODE ICI
+mot_de_passe_saisi = st.sidebar.text_input("Code secret", type="password")
+MOT_DE_PASSE_CORRECT = "1234" # <--- TON CODE ICI
 
 # --- 4. INTERFACE PRINCIPALE ---
 st.title("🤖 Hartur IA")
 
-# Gestion de la session pour éviter les rechargements inutiles
-if "chat_nom" not in st.session_state:
-    st.session_state.chat_nom = ""
+# On remet exactement la case prénom comme au début
+nom_utilisateur = st.text_input("Comment t'appelles-tu ?")
 
-# Étape 1 : Demander le prénom
-if st.session_state.chat_nom == "":
-    nom_saisi = st.text_input("Bonjour ! Quel est ton prénom ?", placeholder="Écris ici...")
-    if st.button("Lancer la discussion"):
-        if nom_saisi:
-            st.session_state.chat_nom = nom_saisi
-            st.rerun()
-        else:
-            st.warning("Merci d'entrer un prénom.")
+if not nom_utilisateur:
+    st.info("👋 Bonjour ! Entre ton nom pour commencer à discuter.")
 else:
-    # Étape 2 : Le Chat une fois le prénom validé
-    st.write(f"Content de te voir, **{st.session_state.chat_nom}** !")
+    st.write(f"Ravi de t'aider, **{nom_utilisateur}** !")
     
-    if st.button("Quitter la session"):
-        st.session_state.chat_nom = ""
-        st.session_state.messages = []
-        st.rerun()
-
     if "messages" not in st.session_state:
         st.session_state.messages = []
 
-    # Affichage de l'historique de la discussion
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+    # Affichage du chat
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
-    # Zone d'écriture
-    if prompt := st.chat_input("Pose ta question à Hartur..."):
+    # Entrée du message
+    if prompt := st.chat_input("Ta question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Appel à Mistral AI
+        # Appel à Mistral
         try:
             api_key = st.secrets["MISTRAL_KEY"]
-            headers = {"Authorization": f"Bearer {api_key}"}
-            payload = {
-                "model": "mistral-tiny",
-                "messages": [
-                    {"role": "system", "content": instruction},
-                    {"role": "user", "content": prompt}
-                ]
-            }
-            
-            res = requests.post("https://api.mistral.ai/v1/chat/completions", json=payload, headers=headers)
+            res = requests.post(
+                "https://api.mistral.ai/v1/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={
+                    "model": "mistral-tiny",
+                    "messages": [
+                        {"role": "system", "content": instruction},
+                        {"role": "user", "content": prompt}
+                    ]
+                }
+            )
             
             if res.status_code == 200:
-                reponse_ia = res.json()['choices'][0]['message']['content']
+                reponse = res.json()['choices'][0]['message']['content']
                 
-                # Sauvegarde dans Firestore
+                # Sauvegarde Firebase avec le NOM
                 db.collection("messages").add({
-                    "nom": st.session_state.chat_nom,
+                    "nom": nom_utilisateur,
                     "question": prompt,
-                    "reponse": reponse_ia,
+                    "reponse": reponse,
                     "date": firestore.SERVER_TIMESTAMP
                 })
                 
                 with st.chat_message("assistant"):
-                    st.markdown(reponse_ia)
-                    st.session_state.messages.append({"role": "assistant", "content": reponse_ia})
+                    st.markdown(reponse)
+                    st.session_state.messages.append({"role": "assistant", "content": reponse})
             else:
-                st.error("L'IA est indisponible. Vérifie ta clé Mistral dans les Secrets.")
+                st.error("L'IA ne répond pas. Vérifie ta clé Mistral dans les Secrets.")
         except Exception as e:
             st.error(f"Erreur technique : {e}")
 
-# --- 5. LOGIQUE ADMIN (Correction Affichage) ---
-if code_admin == MOT_DE_PASSE_CORRECT:
+# --- 5. ESPACE ADMIN (Rectifié : s'affiche quand le mot de passe est bon) ---
+if mot_de_passe_saisi == MOT_DE_PASSE_CORRECT:
     st.divider()
-    st.header("📊 Historique des conversations")
-    
-    try:
-        # Récupère les 15 derniers messages
-        docs = db.collection("messages").order_by("date", direction=firestore.Query.DESCENDING).limit(15).stream()
-        for doc in docs:
-            d = doc.to_dict()
-            st.info(f"👤 **{d.get('nom')}** : {d.get('question')}")
-            st.write(f"🤖 *Hartur* : {d.get('reponse')}")
-            st.write("---")
-    except Exception as e:
-        st.write("Aucun message trouvé ou erreur de base de données.")
+    st.header("📊 Historique Admin")
+    # On récupère les messages directement
+    docs = db.collection("messages").order_by("date", direction=firestore.Query.DESCENDING).limit(10).stream()
+    for doc in docs:
+        d = doc.to_dict()
+        st.info(f"👤 {d.get('nom')} : {d.get('question')}")
