@@ -34,11 +34,12 @@ try:
 except Exception:
     api_key = None
 
+
 def appeler_mistral(prompt):
     if not api_key:
         return "Erreur : Clé API non configurée."
 
-    # Réponse spéciale créateur
+    # Créateur
     if any(x in prompt.lower() for x in ["qui t'a créé", "ton créateur", "t'a fait"]):
         return "J'ai été créé par Zacharie Pays 🤖 C'est lui le boss !"
 
@@ -58,6 +59,7 @@ def appeler_mistral(prompt):
     except Exception:
         return "Petit bug technique avec l'IA."
 
+
 # --- MENU ---
 menu = st.sidebar.selectbox("Menu", ["💬 Discussion", "🔐 Admin"])
 
@@ -75,8 +77,8 @@ if menu == "💬 Discussion":
                 st.rerun()
     else:
         st.sidebar.write(f"Session de : **{st.session_state.nom}**")
-        
-        # Affichage du chat
+
+        # Chat affichage
         for m in st.session_state.messages:
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
@@ -84,7 +86,7 @@ if menu == "💬 Discussion":
         prompt = st.chat_input("Écris ici...")
 
         if prompt:
-            # Affichage User
+            # user
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
@@ -95,23 +97,18 @@ if menu == "💬 Discussion":
             with st.chat_message("assistant"):
                 st.markdown(reponse)
 
-            # 🔥 SAUVEGARDE FIREBASE (Structure : conversations -> session_id -> messages)
+            # 🔥 FIREBASE (SIMPLIFIÉ)
             try:
-                # 1. On crée ou met à jour le dossier de la session
-                doc_ref = db.collection("conversations").document(st.session_state.session_id)
-                doc_ref.set({
+                db.collection("discutions").add({
+                    "session_id": st.session_state.session_id,
                     "nom": st.session_state.nom,
-                    "derniere_activite": datetime.utcnow()
-                }, merge=True)
-
-                # 2. On ajoute le message dans la sous-collection
-                doc_ref.collection("messages").add({
                     "user": prompt,
                     "ia": reponse,
                     "timestamp": datetime.utcnow()
                 })
             except Exception as e:
                 st.error(f"Erreur de sauvegarde : {e}")
+
 
 # ======================================================
 # 🔐 ADMIN
@@ -128,32 +125,33 @@ elif menu == "🔐 Admin":
             else:
                 st.error("Mot de passe incorrect")
     else:
-        st.sidebar.button("Déconnexion", on_click=lambda: st.session_state.update({"admin_auth": False}))
-        st.subheader("📂 Conversations par utilisateur")
+        st.sidebar.button(
+            "Déconnexion",
+            on_click=lambda: st.session_state.update({"admin_auth": False})
+        )
+
+        st.subheader("📂 Conversations")
 
         try:
-            # On récupère toutes les sessions de la collection "conversations"
-            sessions = db.collection("conversations").order_by("derniere_activite", direction=firestore.Query.DESCENDING).stream()
+            msgs = db.collection("discutions").order_by(
+                "timestamp",
+                direction=firestore.Query.DESCENDING
+            ).stream()
 
-            for s in sessions:
-                s_data = s.to_dict()
-                nom_user = s_data.get('nom', 'Anonyme')
-                
-                # On crée un dossier (expander) pour chaque session
-                with st.expander(f"👤 {nom_user} (ID: {s.id[:5]}...)"):
-                    # On va chercher les messages à l'intérieur de cette session
-                    msgs = db.collection("conversations").document(s.id).collection("messages").order_by("timestamp").stream()
-                    
-                    found = False
-                    for m in msgs:
-                        found = True
-                        m_data = m.to_dict()
-                        st.write(f"💬 **Lui:** {m_data.get('user')}")
-                        st.write(f"🤖 **Hartur:** {m_data.get('ia')}")
-                        st.divider()
-                    
-                    if not found:
-                        st.write("Aucun message dans cette session.")
+            current_session = None
+
+            for m in msgs:
+                data = m.to_dict()
+
+                if current_session != data["session_id"]:
+                    current_session = data["session_id"]
+                    st.markdown("---")
+                    st.write(f"👤 **{data['nom']}** | Session: {current_session[:6]}")
+
+                st.write(f"💬 User: {data['user']}")
+                st.write(f"🤖 IA: {data['ia']}")
+                st.caption(data["timestamp"])
+                st.divider()
 
         except Exception as e:
             st.error(f"Erreur Firebase : {e}")
