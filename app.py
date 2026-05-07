@@ -34,7 +34,7 @@ api_key = st.secrets.get("MISTRAL_KEY", "")
 
 
 # =========================
-# 🤖 IA (FIX STABLE)
+# 🤖 IA ULTRA FIX RAPIDE
 # =========================
 def appeler_mistral(prompt):
 
@@ -45,29 +45,34 @@ def appeler_mistral(prompt):
         return "Je suis une création de Zacharie Pays."
 
     try:
-        r = requests.post(
-            "https://api.mistral.ai/v1/chat/completions",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {api_key}"
-            },
-            json={
-                "model": "open-mistral-7b",
-                "messages": [
-                    {"role": "system", "content": "Tu es Hartur, une IA simple, fluide et utile."},
-                    {"role": "user", "content": prompt}
-                ],
-                "temperature": 0.7
-            },
-            timeout=20
-        )
+        with st.spinner("🤖 Hartur réfléchit..."):
+
+            r = requests.post(
+                "https://api.mistral.ai/v1/chat/completions",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                },
+                json={
+                    "model": "open-mistral-7b",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "Réponses rapides, claires et courtes."
+                        },
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.6
+                },
+                timeout=7  # 🔥 FIX LAG
+            )
 
         data = r.json()
 
         return data.get("choices", [{}])[0].get("message", {}).get("content", "Erreur IA")
 
     except:
-        return "Erreur IA"
+        return "⚠️ IA lente ou indisponible"
 
 
 # =========================
@@ -107,13 +112,12 @@ if menu == "Chat":
 
         if prompt:
 
-            # user
             st.session_state.messages.append({
                 "role": "user",
                 "content": prompt
             })
 
-            # IA
+            # 🤖 IA (plus rapide maintenant)
             rep = appeler_mistral(prompt)
 
             st.session_state.messages.append({
@@ -129,12 +133,11 @@ if menu == "Chat":
                     "reponse": rep
                 })
 
-            # 🔥 IMPORTANT FIX AFFICHAGE
             st.rerun()
 
 
 # =========================
-# 🔐 ADMIN FIX + CARDS + CHAT
+# 🔐 ADMIN (CARDS + CHAT)
 # =========================
 else:
 
@@ -143,7 +146,6 @@ else:
     if "admin" not in st.session_state:
         st.session_state.admin = False
 
-    # LOGIN
     if not st.session_state.admin:
 
         pwd = st.text_input("Mot de passe", type="password")
@@ -175,7 +177,7 @@ else:
 
 
     # =========================
-    # STATE USER SELECT
+    # STATE
     # =========================
     if "selected_user" not in st.session_state:
         st.session_state.selected_user = None
@@ -207,7 +209,7 @@ else:
 
         nom = st.session_state.selected_user
 
-        st.subheader(f"💬 Conversation : {nom}")
+        st.subheader(f"💬 {nom}")
 
         if st.button("⬅ Retour"):
             st.session_state.selected_user = None
@@ -217,6 +219,6 @@ else:
 
         for c in conv:
 
-            st.markdown(f"👤 **User :** {c.get('texte','')}")
-            st.markdown(f"🤖 **IA :** {c.get('reponse','')}")
+            st.markdown(f"👤 {c.get('texte','')}")
+            st.markdown(f"🤖 {c.get('reponse','')}")
             st.divider()
