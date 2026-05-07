@@ -49,14 +49,17 @@ def appeler_mistral(prompt):
         return "Erreur IA."
 
 
-# 💾 SAUVEGARDE PAR PERSONNE
+# 💾 SAUVEGARDE PAR DATE + PRENOM
 def save_message(nom, session_id, user, ia):
-    os.makedirs("data", exist_ok=True)
+    date_folder = datetime.utcnow().strftime("%Y-%m-%d")
+    os.makedirs(f"data/{date_folder}", exist_ok=True)
 
-    filename = f"data/{nom.lower().replace(' ', '_')}.txt"
+    filename = f"data/{date_folder}/{nom.lower().replace(' ', '_')}.txt"
+
+    date_now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     with open(filename, "a", encoding="utf-8") as f:
-        f.write(f"\nSESSION: {session_id}\n")
+        f.write(f"\n📅 {date_now} | SESSION: {session_id}\n")
         f.write(f"[USER] {user}\n")
         f.write(f"[IA] {ia}\n")
         f.write("-" * 40 + "\n")
@@ -132,21 +135,35 @@ elif menu == "🔐 Admin":
     else:
         st.success("Connecté 🔓")
 
-        st.subheader("📂 Fiches utilisateurs")
+        st.subheader("📂 Conversations par date")
 
         os.makedirs("data", exist_ok=True)
-        files = os.listdir("data")
 
-        if not files:
-            st.info("Aucune conversation enregistrée.")
+        dates = sorted(os.listdir("data"), reverse=True)
+
+        if not dates:
+            st.info("Aucune conversation.")
         else:
-            for file in files:
-                if file.endswith(".txt"):
-                    name = file.replace(".txt", "").replace("_", " ").title()
+            for date in dates:
+                date_path = f"data/{date}"
 
-                    with st.expander(f"👤 {name}"):
-                        with open(f"data/{file}", "r", encoding="utf-8") as f:
-                            st.text(f.read())
+                if os.path.isdir(date_path):
+                    with st.expander(f"📅 {date}"):
+
+                        files = os.listdir(date_path)
+
+                        if not files:
+                            st.write("Aucune conversation ce jour-là.")
+                        else:
+                            for file in files:
+                                name = file.replace(".txt", "").replace("_", " ").title()
+
+                                st.markdown(f"👤 **{name}**")
+
+                                with open(f"{date_path}/{file}", "r", encoding="utf-8") as f:
+                                    st.text(f.read())
+
+                                st.divider()
 
         if st.button("Déconnexion"):
             st.session_state.admin_auth = False
