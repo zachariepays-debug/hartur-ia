@@ -10,7 +10,6 @@ st.set_page_config(page_title="Hartur IA", page_icon="🤖")
 # --- FIREBASE ---
 if not firebase_admin._apps:
     try:
-        # Assure-toi que ce fichier .json est dans le dossier PROJET_HARTUR
         cred = credentials.Certificate('arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json')
         firebase_admin.initialize_app(cred)
     except Exception as e:
@@ -19,13 +18,11 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # --- MISTRAL ---
-# Utilise ta clé Mistral ici
+# REMPLACE PAR TA CLÉ MISTRAL
 api_key = "TA_CLE_MISTRAL_ICI" 
 
 def appeler_mistral(prompt):
     p = prompt.lower()
-
-    # Réponse personnalisée sur le créateur
     if any(word in p for word in ["créateur", "createur", "qui t'a fait", "qui t'a créé"]):
         return "C'est Zacharie Pays qui m'a créé. C'est lui le boss, il gère de fou !"
 
@@ -35,12 +32,10 @@ def appeler_mistral(prompt):
         "Authorization": f"Bearer {api_key}"
     }
 
-    instructions = "Tu es Hartur. Parle comme un ado cool, naturel et sympa. Tutoie l'utilisateur."
-
     data = {
         "model": "open-mistral-7b",
         "messages": [
-            {"role": "system", "content": instructions},
+            {"role": "system", "content": "Tu es Hartur, un ado cool et sympa. Tutoie l'utilisateur."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.8
@@ -49,13 +44,11 @@ def appeler_mistral(prompt):
     try:
         response = requests.post(url, headers=headers, json=data)
         return response.json()['choices'][0]['message']['content']
-    except Exception as e:
-        return f"Désolé, j'ai un bug technique ! (Erreur: {e})"
-
+    except:
+        return "Désolé, petit bug technique !"
 
 # --- NAVIGATION ---
 menu = st.sidebar.selectbox("Navigation", ["💬 Discussion", "🔐 Admin"])
-
 
 # ======================================================
 # 💬 DISCUSSION
@@ -65,40 +58,34 @@ if menu == "💬 Discussion":
 
     if "nom" not in st.session_state:
         nom = st.text_input("Ton prénom ou pseudo")
-
         if st.button("Entrer"):
             if nom.strip() != "":
                 st.session_state.nom = nom
                 st.session_state.messages = []
                 st.rerun()
     else:
-        st.sidebar.write(f"Connecté en tant que : **{st.session_state.nom}**")
-        
+        st.sidebar.write(f"Connecté : **{st.session_state.nom}**")
         if st.sidebar.button("Se déconnecter"):
             del st.session_state.nom
             st.rerun()
 
-        # Affichage du chat
         for m in st.session_state.messages:
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
 
-        prompt = st.chat_input("Dis quelque chose à Hartur...")
+        prompt = st.chat_input("Dis quelque chose...")
 
         if prompt:
-            # Affichage utilisateur
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
 
-            # Réponse IA
             reponse = appeler_mistral(prompt)
-
             with st.chat_message("assistant"):
                 st.markdown(reponse)
             st.session_state.messages.append({"role": "assistant", "content": reponse})
 
-            # --- SAUVEGARDE FIREBASE ---
+            # Sauvegarde automatique
             try:
                 db.collection("discussions").add({
                     "nom": st.session_state.nom,
@@ -106,53 +93,59 @@ if menu == "💬 Discussion":
                     "reponse": reponse,
                     "date": datetime.utcnow()
                 })
-            except Exception as e:
-                st.error(f"Erreur sauvegarde Firebase : {e}")
-
+            except:
+                pass
 
 # ======================================================
-# 🔐 ADMIN (AFFICHAGE CORRIGÉ)
+# 🔐 ADMIN (VUE DIRECTE)
 # ======================================================
 elif menu == "🔐 Admin":
     st.title("🔐 Espace Admin")
 
-    pwd = st.text_input("Mot de passe :", type="password")
+    if "admin_auth" not in st.session_state:
+        st.session_state.admin_auth = False
 
-    if pwd == "babar":
-        st.success("✅ Accès autorisé")
+    # Si pas encore connecté, on demande le mot de passe
+    if not st.session_state.admin_auth:
+        pwd = st.text_input("Mot de passe :", type="password")
+        if st.button("Se connecter"):
+            if pwd == "babar":
+                st.session_state.admin_auth = True
+                st.rerun()
+            else:
+                st.error("❌ Mot de passe incorrect")
+    
+    # Si connecté, on affiche DIRECTEMENT les conversations
+    else:
+        if st.sidebar.button("Quitter l'Admin"):
+            st.session_state.admin_auth = False
+            st.rerun()
+
+        st.subheader("📁 Historique des conversations")
         
         try:
-            # Récupération brute des documents
             docs = list(db.collection("discussions").stream())
             
             if not docs:
-                st.warning("Aucune conversation trouvée dans la base de données.")
+                st.info("Aucun message dans la base 'discussions'.")
             else:
-                # Organisation des messages par utilisateur
                 conversations = {}
                 for d in docs:
                     data = d.to_dict()
-                    user_name = data.get("nom", "Inconnu")
-                    if user_name not in conversations:
-                        conversations[user_name] = []
-                    conversations[user_name].append(data)
+                    u = data.get("nom", "Inconnu")
+                    if u not in conversations:
+                        conversations[u] = []
+                    conversations[u].append(data)
 
-                st.subheader(f"📁 {len(conversations)} utilisateur(s) trouvé(s)")
-
-                # Affichage des dossiers par nom
                 for user_name, msgs in conversations.items():
-                    with st.expander(f"👤 {user_name} — ({len(msgs)} messages)"):
-                        # Inversion pour voir le plus récent en premier
+                    with st.expander(f"👤 {user_name} ({len(msgs)} messages)"):
+                        # Tri du plus récent au plus ancien
                         for m in reversed(msgs):
-                            st.write(f"💬 **Message :** {m.get('texte')}")
-                            st.write(f"🤖 **Réponse :** {m.get('reponse')}")
+                            st.write(f"❓ **{user_name}:** {m.get('texte')}")
+                            st.write(f"🤖 **Hartur:** {m.get('reponse')}")
                             st.divider()
-        
         except Exception as e:
-            st.error(f"Erreur de lecture : {e}")
+            st.error(f"Erreur : {e}")
 
         if st.button("🔄 Actualiser"):
             st.rerun()
-
-    elif pwd:
-        st.error("❌ Mot de passe incorrect")
