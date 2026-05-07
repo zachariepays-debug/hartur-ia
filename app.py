@@ -18,7 +18,7 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # --- MISTRAL ---
-# REMPLACE PAR TA CLÉ MISTRAL
+# REMPLACE BIEN "TA_CLE_MISTRAL_ICI" PAR TA VRAIE CLÉ
 api_key = "TA_CLE_MISTRAL_ICI" 
 
 def appeler_mistral(prompt):
@@ -43,9 +43,15 @@ def appeler_mistral(prompt):
 
     try:
         response = requests.post(url, headers=headers, json=data)
-        return response.json()['choices'][0]['message']['content']
-    except:
-        return "Désolé, petit bug technique !"
+        res_json = response.json()
+        if "choices" in res_json:
+            return res_json['choices'][0]['message']['content']
+        else:
+            # Affiche l'erreur renvoyée par Mistral s'il y en a une
+            return f"Erreur Mistral : {res_json}"
+    except Exception as e:
+        # Affiche l'erreur technique précise
+        return f"Erreur technique précise : {e}"
 
 # --- NAVIGATION ---
 menu = st.sidebar.selectbox("Navigation", ["💬 Discussion", "🔐 Admin"])
@@ -85,7 +91,7 @@ if menu == "💬 Discussion":
                 st.markdown(reponse)
             st.session_state.messages.append({"role": "assistant", "content": reponse})
 
-            # Sauvegarde automatique
+            # Sauvegarde automatique vers Firebase
             try:
                 db.collection("discussions").add({
                     "nom": st.session_state.nom,
@@ -97,7 +103,7 @@ if menu == "💬 Discussion":
                 pass
 
 # ======================================================
-# 🔐 ADMIN (VUE DIRECTE)
+# 🔐 ADMIN
 # ======================================================
 elif menu == "🔐 Admin":
     st.title("🔐 Espace Admin")
@@ -105,7 +111,6 @@ elif menu == "🔐 Admin":
     if "admin_auth" not in st.session_state:
         st.session_state.admin_auth = False
 
-    # Si pas encore connecté, on demande le mot de passe
     if not st.session_state.admin_auth:
         pwd = st.text_input("Mot de passe :", type="password")
         if st.button("Se connecter"):
@@ -114,8 +119,6 @@ elif menu == "🔐 Admin":
                 st.rerun()
             else:
                 st.error("❌ Mot de passe incorrect")
-    
-    # Si connecté, on affiche DIRECTEMENT les conversations
     else:
         if st.sidebar.button("Quitter l'Admin"):
             st.session_state.admin_auth = False
@@ -125,9 +128,8 @@ elif menu == "🔐 Admin":
         
         try:
             docs = list(db.collection("discussions").stream())
-            
             if not docs:
-                st.info("Aucun message dans la base 'discussions'.")
+                st.info("Aucun message trouvé.")
             else:
                 conversations = {}
                 for d in docs:
@@ -139,13 +141,12 @@ elif menu == "🔐 Admin":
 
                 for user_name, msgs in conversations.items():
                     with st.expander(f"👤 {user_name} ({len(msgs)} messages)"):
-                        # Tri du plus récent au plus ancien
                         for m in reversed(msgs):
                             st.write(f"❓ **{user_name}:** {m.get('texte')}")
                             st.write(f"🤖 **Hartur:** {m.get('reponse')}")
                             st.divider()
         except Exception as e:
-            st.error(f"Erreur : {e}")
+            st.error(f"Erreur Firebase : {e}")
 
         if st.button("🔄 Actualiser"):
             st.rerun()
