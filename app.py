@@ -10,38 +10,28 @@ st.set_page_config(page_title="Hartur IA", page_icon="🤖")
 # --- FIREBASE ---
 if not firebase_admin._apps:
     try:
-        # Utilise le fichier JSON que tu as dans ton dossier
         cred = credentials.Certificate('arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json')
         firebase_admin.initialize_app(cred)
     except Exception as e:
-        st.error(f"Erreur de connexion Firebase : {e}")
+        st.error(f"Erreur Firebase : {e}")
 
 db = firestore.client()
 
-# --- MISTRAL (Lecture depuis les Secrets Streamlit) ---
-try:
-    api_key = st.secrets["MISTRAL_KEY"]
-except Exception:
-    st.error("La clé MISTRAL_KEY est manquante dans les Secrets.")
-    api_key = None
+# --- MISTRAL ---
+api_key = st.secrets.get("MISTRAL_KEY", "TA_CLE_ICI")
 
 def appeler_mistral(prompt):
-    if not api_key: return "Erreur de configuration."
-    
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     data = {
         "model": "open-mistral-7b",
-        "messages": [
-            {"role": "system", "content": "Tu es Hartur, un ado cool."},
-            {"role": "user", "content": prompt}
-        ]
+        "messages": [{"role": "user", "content": prompt}]
     }
     try:
         response = requests.post(url, headers=headers, json=data)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Petit bug technique avec Mistral."
+        return "Erreur de connexion à l'IA."
 
 # --- NAVIGATION ---
 menu = st.sidebar.selectbox("Menu", ["💬 Discussion", "🔐 Admin"])
@@ -53,58 +43,72 @@ if menu == "💬 Discussion":
     st.title("🤖 Hartur IA")
     if "nom" not in st.session_state:
         nom = st.text_input("Ton prénom ?")
-        if st.button("Go"):
+        if st.button("Lancer"):
             st.session_state.nom = nom
-            st.session_state.messages = []
             st.rerun()
     else:
-        for m in st.session_state.messages:
-            with st.chat_message(m["role"]): st.markdown(m["content"])
-
         prompt = st.chat_input("Dis moi un truc...")
         if prompt:
-            st.session_state.messages.append({"role": "user", "content": prompt})
             reponse = appeler_mistral(prompt)
-            st.session_state.messages.append({"role": "assistant", "content": reponse})
-            
-            # SAUVEGARDE DANS LA COLLECTION "discussions"
+            st.write(f"**Toi:** {prompt}")
+            st.write(f"**Hartur:** {reponse}")
+            # Sauvegarde
             db.collection("discussions").add({
                 "nom": st.session_state.nom,
                 "texte": prompt,
                 "reponse": reponse,
                 "date": datetime.utcnow()
             })
-            st.rerun()
 
 # ======================================================
-# 🔐 ADMIN (AFFICHAGE DES CONVERSATIONS)
+# 🔐 ADMIN (CORRIGÉ POUR AFFICHER LES MESSAGES)
 # ======================================================
 elif menu == "🔐 Admin":
     st.title("🔐 Espace Admin")
-    pwd = st.text_input("Mot de passe :", type="password")
 
-    if pwd == "babar":
-        st.success("Accès autorisé")
+    # Initialisation de l'état de connexion si besoin
+    if "auth_admin" not in st.session_state:
+        st.session_state.auth_admin = False
+
+    # Étape 1 : Formulaire de connexion (si pas connecté)
+    if not st.session_state.auth_admin:
+        pwd = st.text_input("Mot de passe :", type="password")
+        if st.button("Se connecter"):
+            if pwd == "babar":
+                st.session_state.auth_admin = True
+                st.rerun() # Relance pour effacer le champ password
+            else:
+                st.error("Mot de passe incorrect")
+
+    # Étape 2 : Affichage des données (si connecté)
+    else:
+        st.sidebar.button("Déconnexion Admin", on_click=lambda: st.session_state.update({"auth_admin": False}))
         
-        # On force la lecture de la collection "discussions"
+        st.subheader("📁 Dossiers de conversations")
+        
         try:
+            # Récupération de la collection "discussions"
             docs = list(db.collection("discussions").stream())
             
             if not docs:
-                st.warning("La collection 'discussions' est vide dans Firebase.")
+                st.info("Aucun message trouvé dans la base 'discussions'.")
             else:
-                conversations = {}
+                convs = {}
                 for d in docs:
                     data = d.to_dict()
                     u = data.get("nom", "Anonyme")
-                    if u not in conversations: conversations[u] = []
-                    conversations[u].append(data)
+                    if u not in convs: convs[u] = []
+                    convs[u].append(data)
 
-                for user, msgs in conversations.items():
-                    with st.expander(f"👤 Messages de {user}"):
-                        for m in reversed(msgs):
-                            st.write(f"**Utilisateur:** {m.get('texte')}")
-                            st.write(f"**Hartur:** {m.get('reponse')}")
+                # Création d'un menu déroulant par utilisateur
+                for user, messages in convs.items():
+                    with st.expander(f"👤 {user} ({len(messages)} messages)"):
+                        for m in reversed(messages):
+                            st.write(f"💬 **Message :** {m.get('texte')}")
+                            st.write(f"🤖 **Réponse :** {m.get('reponse')}")
                             st.divider()
         except Exception as e:
-            st.error(f"Erreur de lecture : {e}")
+            st.error(f"Erreur de lecture Firebase : {e}")
+
+        if st.button("🔄 Rafraîchir les données"):
+            st.rerun()
