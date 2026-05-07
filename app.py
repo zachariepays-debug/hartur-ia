@@ -1,7 +1,5 @@
 import streamlit as st
 import requests
-import firebase_admin
-from firebase_admin import credentials, firestore
 from datetime import datetime
 import uuid
 
@@ -11,26 +9,12 @@ st.set_page_config(page_title="Hartur IA", page_icon="🤖")
 # --- SESSION STATE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "admin_auth" not in st.session_state:
-    st.session_state.admin_auth = False
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 if "nom" not in st.session_state:
     st.session_state.nom = None
-
-# --- CLEAN NOM ---
-def clean_name(name):
-    return name.strip().lower().replace(" ", "_")
-
-# --- FIREBASE ---
-if not firebase_admin._apps:
-    try:
-        cred = credentials.Certificate('arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json')
-        firebase_admin.initialize_app(cred)
-    except Exception as e:
-        st.error(f"Erreur Firebase : {e}")
-
-db = firestore.client()
+if "admin_auth" not in st.session_state:
+    st.session_state.admin_auth = False
 
 # --- MISTRAL ---
 try:
@@ -41,9 +25,9 @@ except Exception:
 
 def appeler_mistral(prompt):
     if not api_key:
-        return "Erreur : Clé API non configurée."
+        return "Erreur : clé API manquante."
 
-    if any(x in prompt.lower() for x in ["qui t'a créé", "ton créateur", "t'a fait"]):
+    if any(x in prompt.lower() for x in ["qui t'a créé", "ton créateur"]):
         return "J'ai été créé par Zacharie Pays 🤖"
 
     url = "https://api.mistral.ai/v1/chat/completions"
@@ -57,14 +41,21 @@ def appeler_mistral(prompt):
     }
 
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=15)
-        return response.json()['choices'][0]['message']['content']
+        r = requests.post(url, headers=headers, json=data, timeout=15)
+        return r.json()['choices'][0]['message']['content']
     except Exception:
-        return "Petit bug technique."
+        return "Erreur IA."
+
+
+# 💾 SAUVEGARDE ULTRA SIMPLE
+def save_message(nom, session_id, user, ia):
+    with open("discutions.txt", "a", encoding="utf-8") as f:
+        f.write(f"{nom} | {session_id} | {user} | {ia} | {datetime.utcnow()}\n")
 
 
 # --- MENU ---
 menu = st.sidebar.selectbox("Menu", ["💬 Discussion", "🔐 Admin"])
+
 
 # ======================================================
 # 💬 DISCUSSION
@@ -72,24 +63,19 @@ menu = st.sidebar.selectbox("Menu", ["💬 Discussion", "🔐 Admin"])
 if menu == "💬 Discussion":
     st.title("🤖 Hartur IA")
 
-    # 👤 NOM + RESET CHAT
     if st.session_state.nom is None:
-        nom_saisi = st.text_input("Ton prénom pour commencer :")
+        nom = st.text_input("Ton prénom :")
 
         if st.button("Lancer"):
-            if nom_saisi.strip():
-                st.session_state.nom = nom_saisi.strip()
-
-                # 🔥 IMPORTANT : nouvelle session à chaque connexion
+            if nom.strip():
+                st.session_state.nom = nom.strip()
                 st.session_state.session_id = str(uuid.uuid4())
                 st.session_state.messages = []
-
                 st.rerun()
 
     else:
         st.sidebar.write(f"👤 {st.session_state.nom}")
 
-        # 💬 affichage chat local
         for m in st.session_state.messages:
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
@@ -109,28 +95,13 @@ if menu == "💬 Discussion":
             with st.chat_message("assistant"):
                 st.markdown(reponse)
 
-            # 🔥 FIREBASE
-            try:
-                user_id = clean_name(st.session_state.nom)
-
-                db.collection("conversations") \
-                  .document(user_id) \
-                  .collection("sessions") \
-                  .document(st.session_state.session_id) \
-                  .collection("messages") \
-                  .add({
-                      "user": prompt,
-                      "ia": reponse,
-                      "timestamp": datetime.utcnow()
-                  })
-
-                db.collection("conversations").document(user_id).set({
-                    "nom": st.session_state.nom,
-                    "derniere_session": st.session_state.session_id
-                }, merge=True)
-
-            except Exception as e:
-                st.error(f"Erreur Firebase : {e}")
+            # 💾 SAUVEGARDE FICHIER
+            save_message(
+                st.session_state.nom,
+                st.session_state.session_id,
+                prompt,
+                reponse
+            )
 
 
 # ======================================================
@@ -141,7 +112,7 @@ elif menu == "🔐 Admin":
 
     if not st.session_state.admin_auth:
         pwd = st.text_input("Mot de passe :", type="password")
-        if st.button("Se connecter"):
+        if st.button("Connexion"):
             if pwd == "babar":
                 st.session_state.admin_auth = True
                 st.rerun()
@@ -149,40 +120,24 @@ elif menu == "🔐 Admin":
                 st.error("Incorrect")
 
     else:
-        st.sidebar.button(
-            "Déconnexion",
-            on_click=lambda: st.session_state.update({"admin_auth": False})
-        )
+        st.success("Connecté 🔓")
 
-        st.subheader("📂 Conversations")
-
+        # 📥 téléchargement du fichier
         try:
-            users = db.collection("conversations").stream()
+            with open("discutions.txt", "r", encoding="utf-8") as f:
+                content = f.read()
 
-            for u in users:
-                st.markdown("---")
-                st.write(f"👤 **{u.id}**")
+            st.download_button(
+                "📥 Télécharger les conversations",
+                content,
+                file_name="discutions.txt"
+            )
 
-                sessions = db.collection("conversations").document(u.id).collection("sessions").stream()
+            st.text_area("Aperçu", content, height=400)
 
-                for s in sessions:
-                    st.write(f"📁 Session : {s.id}")
+        except FileNotFoundError:
+            st.warning("Aucune conversation encore enregistrée.")
 
-                    msgs = db.collection("conversations") \
-                        .document(u.id) \
-                        .collection("sessions") \
-                        .document(s.id) \
-                        .collection("messages") \
-                        .stream()
-
-                    for m in msgs:
-                        d = m.to_dict()
-                        st.write(f"💬 {d['user']}")
-                        st.write(f"🤖 {d['ia']}")
-                        st.divider()
-
-        except Exception as e:
-            st.error(f"Erreur Firebase : {e}")
-
-        if st.button("🔄 Actualiser"):
+        if st.button("Déconnexion"):
+            st.session_state.admin_auth = False
             st.rerun()
