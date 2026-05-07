@@ -1,48 +1,54 @@
 import streamlit as st
 
-# --- INITIALISATION ---
-if 'messages' not in st.session_state:
-    st.session_state.messages = []
+# --- CONFIGURATION DE LA PAGE ---
+st.set_page_config(page_title="Arthur - Admin", page_icon="🔐")
 
-# --- NAVIGATION ---
-# Remplacez cette partie par votre système de navigation habituel si nécessaire
-page = st.sidebar.selectbox("Navigation", ["Chat", "Admin"])
+# --- INITIALISATION DE L'ÉTAT DE LA SESSION ---
+if 'conversation_history' not in st.session_state:
+    st.session_state['conversation_history'] = [
+        {"role": "user", "content": "Bonjour Arthur."},
+        {"role": "assistant", "content": "Bonjour ! Comment puis-je t'aider ?"},
+    ]
 
-if page == "Chat":
-    # Titre standard de votre interface de discussion
-    st.title("Conversation")
+if 'is_admin' not in st.session_state:
+    st.session_state['is_admin'] = False 
+
+# --- INTERFACE ADMIN ---
+if st.session_state['is_admin']:
     
-    # Gestion de l'entrée utilisateur
-    if prompt := st.chat_input("Posez votre question..."):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        # Simulation de la réponse (à lier avec votre moteur d'IA)
-        reponse_ia = f"Réponse à : {prompt}"
-        st.session_state.messages.append({"role": "assistant", "content": reponse_ia})
-
-        # Affichage des messages dans l'interface de chat
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
-
-# --- SECTION ADMIN ---
-elif page == "Admin":
-    # Affichage conforme à votre capture d'écran
+    # En-tête conforme à ton image
     st.markdown("## 🔐 Admin")
     
     if st.button("Se déconnecter"):
-        st.write("Déconnexion en cours...")
+        st.session_state['is_admin'] = False
+        st.rerun()
 
     st.markdown("### Historique des conversations")
     st.write("---")
 
-    # Affichage des logs pour l'administrateur
-    if not st.session_state.messages:
-        st.info("L'historique est actuellement vide.")
-    else:
-        for i, msg in enumerate(st.session_state.messages):
-            if msg["role"] == "user":
-                st.text(f"Utilisateur : {msg['content']}")
-            else:
-                st.text(f"Assistant : {msg['content']}")
-                st.write("---")
+    # Affichage de l'historique
+    for message in st.session_state['conversation_history']:
+        if message["role"] == "user":
+            with st.chat_message("user"):
+                st.write(message["content"])
+        else:
+            with st.chat_message("assistant"):
+                st.write(message["content"])
+
+    st.write("---")
+    if st.button("Effacer l'historique"):
+        st.session_state['conversation_history'] = []
+        st.rerun()
+
+# --- INTERFACE ARTHUR (Connexion) ---
+else:
+    st.title("Arthur") # Titre remis sur Arthur
+    
+    admin_password = st.text_input("Mot de passe Admin", type="password")
+    if st.button("Se connecter"):
+        if admin_password == "admin123": 
+            st.session_state['is_admin'] = True
+            st.success("Connexion réussie !")
+            st.rerun()
+        else:
+            st.error("Mot de passe incorrect.")
