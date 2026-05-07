@@ -8,26 +8,29 @@ from datetime import datetime
 st.set_page_config(page_title="Hartur IA", page_icon="🤖")
 
 # --- FIREBASE ---
+# Pour Streamlit Cloud, on utilise les secrets pour Firebase aussi
 if not firebase_admin._apps:
     try:
-        cred = credentials.Certificate('arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json')
-        firebase_admin.initialize_app(cred)
+        # Si tu es en local, il cherche le fichier JSON
+        # Si tu es en ligne, il utilise les secrets Streamlit
+        if "firebase" in st.secrets:
+            f_cred = credentials.Certificate(dict(st.secrets["firebase"]))
+            firebase_admin.initialize_app(f_cred)
+        else:
+            cred = credentials.Certificate('arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json')
+            firebase_admin.initialize_app(cred)
     except Exception as e:
-        st.error(f"Erreur Firebase : {e}")
+        st.error(f"Erreur de connexion base de données : {e}")
 
 db = firestore.client()
 
-# --- MISTRAL (Lecture depuis les Secrets) ---
-try:
-    # Ici, le script va lire la ligne MISTRAL_KEY que tu as mise sur ta photo
-    api_key = st.secrets["MISTRAL_KEY"]
-except Exception as e:
-    st.error("La clé MISTRAL_KEY est introuvable dans les Secrets Streamlit.")
-    api_key = None
+# --- MISTRAL ---
+# Lecture sécurisée de la clé dans les Secrets
+api_key = st.secrets.get("MISTRAL_KEY", "CLE_NON_CONFIGUREE")
 
 def appeler_mistral(prompt):
-    if not api_key:
-        return "Clé API absente."
+    if api_key == "CLE_NON_CONFIGUREE":
+        return "Erreur : La clé API Mistral n'est pas configurée dans les secrets."
 
     p = prompt.lower()
     if any(word in p for word in ["créateur", "createur", "qui t'a fait", "qui t'a créé"]):
@@ -42,7 +45,7 @@ def appeler_mistral(prompt):
     data = {
         "model": "open-mistral-7b",
         "messages": [
-            {"role": "system", "content": "Tu es Hartur, un ado cool et sympa. Tutoie l'utilisateur."},
+            {"role": "system", "content": "Tu es Hartur, un ado cool. Tutoie l'utilisateur."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.8
@@ -54,7 +57,7 @@ def appeler_mistral(prompt):
         if "choices" in res_json:
             return res_json['choices'][0]['message']['content']
         else:
-            return f"Erreur Mistral : {res_json.get('detail', res_json)}"
+            return f"Note de Mistral : {res_json.get('detail', 'Problème de clé')}"
     except Exception as e:
         return f"Erreur technique : {e}"
 
@@ -68,23 +71,20 @@ if menu == "💬 Discussion":
     st.title("🤖 Hartur IA")
 
     if "nom" not in st.session_state:
-        nom = st.text_input("Ton prénom ou pseudo")
-        if st.button("Entrer"):
-            if nom.strip() != "":
+        nom = st.text_input("Salut ! C'est quoi ton prénom ?")
+        if st.button("Lancer la discussion"):
+            if nom.strip():
                 st.session_state.nom = nom
                 st.session_state.messages = []
                 st.rerun()
     else:
-        st.sidebar.write(f"Utilisateur : **{st.session_state.nom}**")
-        if st.sidebar.button("Déconnexion"):
-            del st.session_state.nom
-            st.rerun()
+        st.sidebar.button("Se déconnecter", on_click=lambda: st.session_state.clear())
 
         for m in st.session_state.messages:
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
 
-        prompt = st.chat_input("Écris ton message...")
+        prompt = st.chat_input("Écris ici...")
 
         if prompt:
             st.session_state.messages.append({"role": "user", "content": prompt})
@@ -96,7 +96,7 @@ if menu == "💬 Discussion":
                 st.markdown(reponse)
             st.session_state.messages.append({"role": "assistant", "content": reponse})
 
-            # Sauvegarde Firebase
+            # Sauvegarde Firebase (Collection : discussions)
             try:
                 db.collection("discussions").add({
                     "nom": st.session_state.nom,
@@ -113,43 +113,40 @@ if menu == "💬 Discussion":
 elif menu == "🔐 Admin":
     st.title("🔐 Espace Admin")
 
-    if "admin_auth" not in st.session_state:
-        st.session_state.admin_auth = False
+    if "admin_ok" not in st.session_state:
+        st.session_state.admin_ok = False
 
-    if not st.session_state.admin_auth:
+    if not st.session_state.admin_ok:
         pwd = st.text_input("Mot de passe :", type="password")
-        if st.button("Se connecter"):
+        if st.button("Connexion"):
             if pwd == "babar":
-                st.session_state.admin_auth = True
+                st.session_state.admin_ok = True
                 st.rerun()
             else:
-                st.error("❌ Mot de passe incorrect")
+                st.error("Faux !")
     else:
-        if st.sidebar.button("Fermer l'Admin"):
-            st.session_state.admin_auth = False
+        if st.sidebar.button("Sortir de l'Admin"):
+            st.session_state.admin_ok = False
             st.rerun()
 
         try:
+            # Récupération de ta collection "discussions"
             docs = list(db.collection("discussions").stream())
             if not docs:
-                st.info("Aucun message trouvé dans Firebase.")
+                st.info("Aucune discussion dans la base.")
             else:
-                conversations = {}
+                convs = {}
                 for d in docs:
                     data = d.to_dict()
-                    u = data.get("nom", "Inconnu")
-                    if u not in conversations:
-                        conversations[u] = []
-                    conversations[u].append(data)
+                    u = data.get("nom", "Anonyme")
+                    if u not in convs: convs[u] = []
+                    convs[u].append(data)
 
-                for user_name, msgs in conversations.items():
-                    with st.expander(f"👤 {user_name} ({len(msgs)} messages)"):
+                for user, msgs in convs.items():
+                    with st.expander(f"👤 {user}"):
                         for m in reversed(msgs):
-                            st.write(f"💬 **Message :** {m.get('texte')}")
-                            st.write(f"🤖 **Hartur :** {m.get('reponse')}")
+                            st.write(f"**Lui:** {m.get('texte')}")
+                            st.write(f"**Hartur:** {m.get('reponse')}")
                             st.divider()
         except Exception as e:
-            st.error(f"Erreur de lecture Firebase : {e}")
-
-        if st.button("🔄 Actualiser"):
-            st.rerun()
+            st.error(f"Erreur Firebase : {e}")
