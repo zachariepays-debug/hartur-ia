@@ -66,6 +66,7 @@ if menu == "💬 Discussion":
 
     if "nom" not in st.session_state:
         nom = st.text_input("Ton prénom ou pseudo")
+
         if st.button("Entrer"):
             if nom.strip() != "":
                 st.session_state.nom = nom
@@ -73,7 +74,7 @@ if menu == "💬 Discussion":
                 st.rerun()
 
     else:
-        st.success(f"Connecté en tant que : {st.session_state.nom}")
+        st.success(f"Connecté : {st.session_state.nom}")
 
         if "messages" not in st.session_state:
             st.session_state.messages = []
@@ -87,6 +88,7 @@ if menu == "💬 Discussion":
         if prompt:
             # USER
             st.session_state.messages.append({"role": "user", "content": prompt})
+
             with st.chat_message("user"):
                 st.markdown(prompt)
 
@@ -98,7 +100,7 @@ if menu == "💬 Discussion":
 
             st.session_state.messages.append({"role": "assistant", "content": reponse})
 
-            # --- FIREBASE SAVE ---
+            # --- SAVE FIREBASE ---
             db.collection("discussions").add({
                 "nom": st.session_state.nom,
                 "texte": prompt,
@@ -108,7 +110,7 @@ if menu == "💬 Discussion":
 
 
 # ======================================================
-# 🔐 ADMIN
+# 🔐 ADMIN (CORRIGÉ)
 # ======================================================
 elif menu == "🔐 Admin":
     st.title("🔐 Espace Admin")
@@ -117,9 +119,9 @@ elif menu == "🔐 Admin":
 
     if pwd == "babar":
 
-        st.success("Accès autorisé")
+        st.success("✅ Accès autorisé")
 
-        # récupérer toutes les discussions
+        # 🔄 récupération Firebase
         docs = db.collection("discussions").stream()
 
         conversations = {}
@@ -133,23 +135,21 @@ elif menu == "🔐 Admin":
 
             conversations[nom].append(data)
 
-        st.subheader("📁 Utilisateurs connectés")
+        st.subheader("📁 Toutes les conversations")
 
+        # 📌 affichage direct automatique
         for nom, msgs in conversations.items():
 
-            if st.button(f"👤 {nom}"):
-                st.session_state["selected_user"] = nom
+            with st.expander(f"👤 {nom} — {len(msgs)} messages"):
 
-        # affichage conversation sélectionnée
-        if "selected_user" in st.session_state:
-            user = st.session_state["selected_user"]
+                for m in msgs:
+                    st.markdown(f"❓ **User :** {m['texte']}")
+                    st.markdown(f"🤖 **Hartur :** {m['reponse']}")
+                    st.divider()
 
-            st.markdown(f"## 💬 Conversation de {user}")
-
-            for m in conversations[user]:
-                st.write(f"❓ **User :** {m['texte']}")
-                st.write(f"🤖 **Hartur :** {m['reponse']}")
-                st.divider()
+        # 🔄 refresh manuel
+        if st.button("🔄 Rafraîchir"):
+            st.rerun()
 
     elif pwd:
-        st.error("Mauvais mot de passe")
+        st.error("❌ Mot de passe incorrect")
