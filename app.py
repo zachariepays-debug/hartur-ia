@@ -16,7 +16,7 @@ if not firebase_admin._apps:
 
 db = firestore.client()
 
-# --- 2. PERSONNALITÉ (Le ton cool qui marche) ---
+# --- 2. PERSONNALITÉ ---
 instruction = "Tu es Hartur, un assistant IA super cool, relax et branché. Parle de façon décontractée."
 
 # --- 3. BARRE LATÉRALE ---
@@ -24,7 +24,7 @@ st.sidebar.title("🔐 Administration")
 code_saisi = st.sidebar.text_input("Code secret", type="password")
 MON_CODE = "1234" 
 
-# --- 4. INTERFACE ---
+# --- 4. INTERFACE CHAT ---
 st.title("🤖 Hartur IA")
 nom = st.text_input("Comment t'appelles-tu ?")
 
@@ -43,7 +43,6 @@ else:
         with st.chat_message("user"):
             st.markdown(prompt)
 
-        # Appel IA
         try:
             api_key = st.secrets["MISTRAL_KEY"]
             res = requests.post(
@@ -72,11 +71,27 @@ else:
         except:
             st.error("Petit bug, réessaie !")
 
-# --- 5. LISTE ADMIN (Tout en bas) ---
+# --- 5. AFFICHAGE ADMIN REGROUPÉ (S'affiche en bas si code OK) ---
 if code_saisi == MON_CODE:
     st.divider()
-    st.header("📊 Liste des messages")
-    docs = db.collection("messages").order_by("date", direction=firestore.Query.DESCENDING).limit(20).stream()
+    st.header("📊 Historique par Utilisateur")
+    
+    # Récupération de tous les messages
+    docs = db.collection("messages").order_by("date", direction=firestore.Query.DESCENDING).stream()
+    
+    # On regroupe par nom dans un dictionnaire
+    groupes = {}
     for doc in docs:
         d = doc.to_dict()
-        st.info(f"👤 {d.get('nom')} : {d.get('question')}")
+        user = d.get('nom', 'Inconnu')
+        if user not in groupes:
+            groupes[user] = []
+        groupes[user].append(d)
+    
+    # Affichage d'une fenêtre extensible par utilisateur
+    for utilisateur, messages in groupes.items():
+        with st.expander(f"👤 Discussion avec {utilisateur}"):
+            for m in messages:
+                st.write(f"**Q:** {m.get('question')}")
+                st.write(f"**R:** {m.get('reponse')}")
+                st.write("---")
