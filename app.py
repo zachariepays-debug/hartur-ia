@@ -18,6 +18,10 @@ if "session_id" not in st.session_state:
 if "nom" not in st.session_state:
     st.session_state.nom = None
 
+# --- CLEAN NOM ---
+def clean_name(name):
+    return name.strip().lower().replace(" ", "_")
+
 # --- FIREBASE ---
 if not firebase_admin._apps:
     try:
@@ -39,9 +43,8 @@ def appeler_mistral(prompt):
     if not api_key:
         return "Erreur : Clé API non configurée."
 
-    # Créateur
     if any(x in prompt.lower() for x in ["qui t'a créé", "ton créateur", "t'a fait"]):
-        return "J'ai été créé par Zacharie Pays 🤖 C'est lui le boss !"
+        return "J'ai été créé par Zacharie Pays 🤖"
 
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
@@ -57,7 +60,7 @@ def appeler_mistral(prompt):
         response = requests.post(url, headers=headers, json=data, timeout=15)
         return response.json()['choices'][0]['message']['content']
     except Exception:
-        return "Petit bug technique avec l'IA."
+        return "Petit bug technique."
 
 
 # --- MENU ---
@@ -69,16 +72,24 @@ menu = st.sidebar.selectbox("Menu", ["💬 Discussion", "🔐 Admin"])
 if menu == "💬 Discussion":
     st.title("🤖 Hartur IA")
 
+    # 👤 NOM + RESET CHAT
     if st.session_state.nom is None:
         nom_saisi = st.text_input("Ton prénom pour commencer :")
+
         if st.button("Lancer"):
             if nom_saisi.strip():
                 st.session_state.nom = nom_saisi.strip()
-                st.rerun()
-    else:
-        st.sidebar.write(f"Session de : **{st.session_state.nom}**")
 
-        # Chat affichage
+                # 🔥 IMPORTANT : nouvelle session à chaque connexion
+                st.session_state.session_id = str(uuid.uuid4())
+                st.session_state.messages = []
+
+                st.rerun()
+
+    else:
+        st.sidebar.write(f"👤 {st.session_state.nom}")
+
+        # 💬 affichage chat local
         for m in st.session_state.messages:
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
@@ -94,27 +105,39 @@ if menu == "💬 Discussion":
             # IA
             reponse = appeler_mistral(prompt)
             st.session_state.messages.append({"role": "assistant", "content": reponse})
+
             with st.chat_message("assistant"):
                 st.markdown(reponse)
 
-            # 🔥 FIREBASE (SIMPLIFIÉ)
+            # 🔥 FIREBASE
             try:
-                db.collection("discutions").add({
-                    "session_id": st.session_state.session_id,
+                user_id = clean_name(st.session_state.nom)
+
+                db.collection("conversations") \
+                  .document(user_id) \
+                  .collection("sessions") \
+                  .document(st.session_state.session_id) \
+                  .collection("messages") \
+                  .add({
+                      "user": prompt,
+                      "ia": reponse,
+                      "timestamp": datetime.utcnow()
+                  })
+
+                db.collection("conversations").document(user_id).set({
                     "nom": st.session_state.nom,
-                    "user": prompt,
-                    "ia": reponse,
-                    "timestamp": datetime.utcnow()
-                })
+                    "derniere_session": st.session_state.session_id
+                }, merge=True)
+
             except Exception as e:
-                st.error(f"Erreur de sauvegarde : {e}")
+                st.error(f"Erreur Firebase : {e}")
 
 
 # ======================================================
 # 🔐 ADMIN
 # ======================================================
 elif menu == "🔐 Admin":
-    st.title("🔐 Espace Admin")
+    st.title("🔐 Admin")
 
     if not st.session_state.admin_auth:
         pwd = st.text_input("Mot de passe :", type="password")
@@ -123,7 +146,8 @@ elif menu == "🔐 Admin":
                 st.session_state.admin_auth = True
                 st.rerun()
             else:
-                st.error("Mot de passe incorrect")
+                st.error("Incorrect")
+
     else:
         st.sidebar.button(
             "Déconnexion",
@@ -133,25 +157,29 @@ elif menu == "🔐 Admin":
         st.subheader("📂 Conversations")
 
         try:
-            msgs = db.collection("discutions").order_by(
-                "timestamp",
-                direction=firestore.Query.DESCENDING
-            ).stream()
+            users = db.collection("conversations").stream()
 
-            current_session = None
+            for u in users:
+                st.markdown("---")
+                st.write(f"👤 **{u.id}**")
 
-            for m in msgs:
-                data = m.to_dict()
+                sessions = db.collection("conversations").document(u.id).collection("sessions").stream()
 
-                if current_session != data["session_id"]:
-                    current_session = data["session_id"]
-                    st.markdown("---")
-                    st.write(f"👤 **{data['nom']}** | Session: {current_session[:6]}")
+                for s in sessions:
+                    st.write(f"📁 Session : {s.id}")
 
-                st.write(f"💬 User: {data['user']}")
-                st.write(f"🤖 IA: {data['ia']}")
-                st.caption(data["timestamp"])
-                st.divider()
+                    msgs = db.collection("conversations") \
+                        .document(u.id) \
+                        .collection("sessions") \
+                        .document(s.id) \
+                        .collection("messages") \
+                        .stream()
+
+                    for m in msgs:
+                        d = m.to_dict()
+                        st.write(f"💬 {d['user']}")
+                        st.write(f"🤖 {d['ia']}")
+                        st.divider()
 
         except Exception as e:
             st.error(f"Erreur Firebase : {e}")
