@@ -7,7 +7,7 @@ from datetime import datetime
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Hartur IA", page_icon="🤖")
 
-# Initialisation des variables de session pour éviter l'erreur AttributeError
+# Initialisation des variables pour éviter les erreurs d'affichage
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "admin_auth" not in st.session_state:
@@ -24,7 +24,6 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # --- MISTRAL ---
-# Utilisation de la clé enregistrée dans tes Secrets Streamlit
 try:
     api_key = st.secrets["MISTRAL_KEY"]
 except Exception:
@@ -32,60 +31,54 @@ except Exception:
 
 def appeler_mistral(prompt):
     if not api_key:
-        return "Erreur : Clé API non configurée dans les Secrets."
-    
+        return "Erreur : Clé API non configurée."
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     data = {
         "model": "open-mistral-7b",
         "messages": [
-            {"role": "system", "content": "Tu es Hartur, un ado cool. Tutoie l'utilisateur."},
+            {"role": "system", "content": "Tu es Hartur, un ado cool."},
             {"role": "user", "content": prompt}
         ]
     }
     try:
         response = requests.post(url, headers=headers, json=data)
         return response.json()['choices'][0]['message']['content']
-    except Exception as e:
-        return f"Petit bug technique : {e}"
+    except:
+        return "Petit bug technique avec l'IA."
 
 # --- NAVIGATION ---
 menu = st.sidebar.selectbox("Menu", ["💬 Discussion", "🔐 Admin"])
 
 # ======================================================
-# 💬 SECTION DISCUSSION
+# 💬 DISCUSSION (Sauvegarde automatique)
 # ======================================================
 if menu == "💬 Discussion":
     st.title("🤖 Hartur IA")
 
     if "nom" not in st.session_state:
-        nom_saisi = st.text_input("Salut ! C'est quoi ton prénom ?")
+        nom_saisi = st.text_input("Ton prénom pour commencer :")
         if st.button("Lancer"):
             if nom_saisi.strip():
                 st.session_state.nom = nom_saisi
                 st.rerun()
     else:
-        st.sidebar.write(f"Utilisateur : **{st.session_state.nom}**")
-        
-        # Affichage sécurisé de l'historique
         for m in st.session_state.messages:
             with st.chat_message(m["role"]):
                 st.markdown(m["content"])
 
-        prompt = st.chat_input("Écris ton message...")
-
+        prompt = st.chat_input("Écris ici...")
         if prompt:
             st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
                 st.markdown(prompt)
 
             reponse = appeler_mistral(prompt)
-            
             with st.chat_message("assistant"):
                 st.markdown(reponse)
             st.session_state.messages.append({"role": "assistant", "content": reponse})
 
-            # Sauvegarde Firebase (Collection : discussions)
+            # SAUVEGARDE DANS FIREBASE (Dossier 'discussions')
             try:
                 db.collection("discussions").add({
                     "nom": st.session_state.nom,
@@ -97,7 +90,7 @@ if menu == "💬 Discussion":
                 pass
 
 # ======================================================
-# 🔐 SECTION ADMIN
+# 🔐 ADMIN (Dossiers par utilisateur)
 # ======================================================
 elif menu == "🔐 Admin":
     st.title("🔐 Espace Admin")
@@ -109,30 +102,37 @@ elif menu == "🔐 Admin":
                 st.session_state.admin_auth = True
                 st.rerun()
             else:
-                st.error("Incorrect")
-    
+                st.error("Mot de passe incorrect")
     else:
         st.sidebar.button("Déconnexion", on_click=lambda: st.session_state.update({"admin_auth": False}))
+        st.subheader("📂 Dossiers de conversations")
         
         try:
+            # Récupération de tous les messages
             docs = list(db.collection("discussions").stream())
+            
             if not docs:
-                st.info("Aucun message dans 'discussions'.")
+                st.info("Aucun message trouvé dans la base.")
             else:
+                # Regroupement automatique par nom
                 convs = {}
                 for d in docs:
                     data = d.to_dict()
-                    u = data.get("nom", "Inconnu")
+                    u = data.get("nom", "Anonyme")
                     if u not in convs: convs[u] = []
                     convs[u].append(data)
 
-                for user, msgs in convs.items():
-                    with st.expander(f"👤 {user} ({len(msgs)} messages)"):
-                        for m in reversed(msgs):
-                            # On gère 'texte' ou 'ecris' pour les anciens messages
-                            txt = m.get('texte') or m.get('ecris') or "Vide"
-                            st.write(f"**Lui:** {txt}")
-                            st.write(f"**IA:** {m.get('reponse')}")
+                # Affichage d'un dossier (expander) par utilisateur
+                for user, messages in convs.items():
+                    with st.expander(f"👤 Conversation de {user}"):
+                        for m in reversed(messages):
+                            # On lit 'texte' ou 'ecris' pour être sûr de rien rater
+                            msg_user = m.get('texte') or m.get('ecris') or "Vide"
+                            st.write(f"💬 **{user}:** {msg_user}")
+                            st.write(f"🤖 **Hartur:** {m.get('reponse')}")
                             st.divider()
         except Exception as e:
-            st.error(f"Erreur lecture : {e}")
+            st.error(f"Erreur Firebase : {e}")
+
+        if st.button("🔄 Actualiser"):
+            st.rerun()
