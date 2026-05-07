@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 from datetime import datetime
 import uuid
+import os
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Hartur IA", page_icon="🤖")
@@ -15,6 +16,7 @@ if "nom" not in st.session_state:
     st.session_state.nom = None
 if "admin_auth" not in st.session_state:
     st.session_state.admin_auth = False
+
 
 # --- MISTRAL ---
 try:
@@ -47,10 +49,17 @@ def appeler_mistral(prompt):
         return "Erreur IA."
 
 
-# 💾 SAUVEGARDE ULTRA SIMPLE
+# 💾 SAUVEGARDE PAR PERSONNE
 def save_message(nom, session_id, user, ia):
-    with open("discutions.txt", "a", encoding="utf-8") as f:
-        f.write(f"{nom} | {session_id} | {user} | {ia} | {datetime.utcnow()}\n")
+    os.makedirs("data", exist_ok=True)
+
+    filename = f"data/{nom.lower().replace(' ', '_')}.txt"
+
+    with open(filename, "a", encoding="utf-8") as f:
+        f.write(f"\nSESSION: {session_id}\n")
+        f.write(f"[USER] {user}\n")
+        f.write(f"[IA] {ia}\n")
+        f.write("-" * 40 + "\n")
 
 
 # --- MENU ---
@@ -95,7 +104,7 @@ if menu == "💬 Discussion":
             with st.chat_message("assistant"):
                 st.markdown(reponse)
 
-            # 💾 SAUVEGARDE FICHIER
+            # 💾 SAVE
             save_message(
                 st.session_state.nom,
                 st.session_state.session_id,
@@ -112,31 +121,32 @@ elif menu == "🔐 Admin":
 
     if not st.session_state.admin_auth:
         pwd = st.text_input("Mot de passe :", type="password")
+
         if st.button("Connexion"):
             if pwd == "babar":
                 st.session_state.admin_auth = True
                 st.rerun()
             else:
-                st.error("Incorrect")
+                st.error("Mot de passe incorrect")
 
     else:
         st.success("Connecté 🔓")
 
-        # 📥 téléchargement du fichier
-        try:
-            with open("discutions.txt", "r", encoding="utf-8") as f:
-                content = f.read()
+        st.subheader("📂 Fiches utilisateurs")
 
-            st.download_button(
-                "📥 Télécharger les conversations",
-                content,
-                file_name="discutions.txt"
-            )
+        os.makedirs("data", exist_ok=True)
+        files = os.listdir("data")
 
-            st.text_area("Aperçu", content, height=400)
+        if not files:
+            st.info("Aucune conversation enregistrée.")
+        else:
+            for file in files:
+                if file.endswith(".txt"):
+                    name = file.replace(".txt", "").replace("_", " ").title()
 
-        except FileNotFoundError:
-            st.warning("Aucune conversation encore enregistrée.")
+                    with st.expander(f"👤 {name}"):
+                        with open(f"data/{file}", "r", encoding="utf-8") as f:
+                            st.text(f.read())
 
         if st.button("Déconnexion"):
             st.session_state.admin_auth = False
