@@ -1,61 +1,50 @@
 import streamlit as st
 
-# --- INITIALISATION DE L'ÉTAT (A mettre au début du script) ---
-# Initialise l'historique s'il n'existe pas encore dans la session
+# --- INITIALISATION DE L'HISTORIQUE ---
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 
-# --- INTERFACE UTILISATEUR (Simulation de chat) ---
-def user_interface():
-    st.title("Mon Application Junior")
-    
-    # Zone de saisie pour l'utilisateur
-    if prompt := st.chat_input("Posez votre question ici..."):
-        # Ajout du message utilisateur à l'historique
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        
-        # Simulation d'une réponse de l'assistant
-        response = f"Echo : {prompt}" 
-        st.session_state.messages.append({"role": "assistant", "content": response})
-        
-        # Affichage immédiat
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+# --- LOGIQUE DE NAVIGATION ---
+# Tu peux adapter cette partie selon comment ton menu est construit (sidebar ou autre)
+menu = ["Interface Chat", "Admin"]
+page = st.sidebar.selectbox("Menu", menu)
 
-# --- SECTION ADMIN MODIFIÉE ---
-def admin_interface():
-    st.markdown("## 🔐 Coin Admin")
-    st.write("Bienvenue dans l'espace de gestion.")
+if page == "Interface Chat":
+    st.title("Conversation") # Ou ton titre habituel
     
-    st.markdown("### 📜 Historique des conversations")
+    # Zone de chat
+    if prompt := st.chat_input("Votre message..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        # Ici ton code pour la réponse de l'IA
+        response = "Ceci est une réponse automatique." 
+        st.session_state.messages.append({"role": "assistant", "content": response})
+
+# --- SECTION ADMIN (CORRIGÉE) ---
+elif page == "Admin":
+    # Titre et icône exactement comme sur ta capture d'écran
+    st.markdown("## 🔐 Admin")
+    
+    if st.button("Se déconnecter"):
+        # Logique de déconnexion
+        st.info("Déconnexion...")
+
+    st.markdown("### Historique des conversations")
     st.write("---")
 
+    # Affichage des messages stockés
     if not st.session_state.messages:
-        st.info("Aucune conversation enregistrée pour le moment.")
+        st.write("Aucun message dans l'historique.")
     else:
-        # Affichage structuré de l'historique
         for i, msg in enumerate(st.session_state.messages):
-            role_label = "👤 Utilisateur" if msg["role"] == "user" else "🤖 Assistant"
-            # Utilisation de expanders ou de texte formaté pour la clarté
-            with st.expander(f"Message {i+1} - {role_label}"):
-                st.write(msg["content"])
-        
-        # Option pour nettoyer les logs
-        if st.button("Effacer les historiques"):
+            if msg["role"] == "user":
+                with st.chat_message("user"):
+                    st.write(f"**Utilisateur:** {msg['content']}")
+            else:
+                with st.chat_message("assistant"):
+                    st.write(f"**IA:** {msg['content']}")
+                    
+    # Petit ajout pratique : bouton pour vider les logs
+    if st.session_state.messages:
+        if st.button("Vider l'historique"):
             st.session_state.messages = []
             st.rerun()
-
-# --- LOGIQUE DE NAVIGATION (MENU) ---
-def main():
-    menu = ["Accueil", "Admin"]
-    choice = st.sidebar.selectbox("Navigation", menu)
-
-    if choice == "Accueil":
-        user_interface()
-    elif choice == "Admin":
-        # Ici, vous pouvez ajouter une vérification de mot de passe si besoin
-        admin_interface()
-
-if __name__ == "__main__":
-    main()
