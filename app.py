@@ -1,50 +1,48 @@
 import streamlit as st
 
-# --- INITIALISATION DE L'HISTORIQUE ---
+# --- INITIALISATION ---
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 
-# --- LOGIQUE DE NAVIGATION ---
-# Tu peux adapter cette partie selon comment ton menu est construit (sidebar ou autre)
-menu = ["Interface Chat", "Admin"]
-page = st.sidebar.selectbox("Menu", menu)
+# --- NAVIGATION ---
+# Remplacez cette partie par votre système de navigation habituel si nécessaire
+page = st.sidebar.selectbox("Navigation", ["Chat", "Admin"])
 
-if page == "Interface Chat":
-    st.title("Conversation") # Ou ton titre habituel
+if page == "Chat":
+    # Titre standard de votre interface de discussion
+    st.title("Conversation")
     
-    # Zone de chat
-    if prompt := st.chat_input("Votre message..."):
+    # Gestion de l'entrée utilisateur
+    if prompt := st.chat_input("Posez votre question..."):
         st.session_state.messages.append({"role": "user", "content": prompt})
-        # Ici ton code pour la réponse de l'IA
-        response = "Ceci est une réponse automatique." 
-        st.session_state.messages.append({"role": "assistant", "content": response})
+        
+        # Simulation de la réponse (à lier avec votre moteur d'IA)
+        reponse_ia = f"Réponse à : {prompt}"
+        st.session_state.messages.append({"role": "assistant", "content": reponse_ia})
 
-# --- SECTION ADMIN (CORRIGÉE) ---
+        # Affichage des messages dans l'interface de chat
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+# --- SECTION ADMIN ---
 elif page == "Admin":
-    # Titre et icône exactement comme sur ta capture d'écran
+    # Affichage conforme à votre capture d'écran
     st.markdown("## 🔐 Admin")
     
     if st.button("Se déconnecter"):
-        # Logique de déconnexion
-        st.info("Déconnexion...")
+        st.write("Déconnexion en cours...")
 
     st.markdown("### Historique des conversations")
     st.write("---")
 
-    # Affichage des messages stockés
+    # Affichage des logs pour l'administrateur
     if not st.session_state.messages:
-        st.write("Aucun message dans l'historique.")
+        st.info("L'historique est actuellement vide.")
     else:
         for i, msg in enumerate(st.session_state.messages):
             if msg["role"] == "user":
-                with st.chat_message("user"):
-                    st.write(f"**Utilisateur:** {msg['content']}")
+                st.text(f"Utilisateur : {msg['content']}")
             else:
-                with st.chat_message("assistant"):
-                    st.write(f"**IA:** {msg['content']}")
-                    
-    # Petit ajout pratique : bouton pour vider les logs
-    if st.session_state.messages:
-        if st.button("Vider l'historique"):
-            st.session_state.messages = []
-            st.rerun()
+                st.text(f"Assistant : {msg['content']}")
+                st.write("---")
