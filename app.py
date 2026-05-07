@@ -1,293 +1,97 @@
 import streamlit as st
-import requests
+import google.generativeai as genai
 import firebase_admin
 from firebase_admin import credentials, firestore
 from datetime import datetime
 
-# =========================================================
-# CONFIGURATION
-# =========================================================
+# --- CONFIGURATION INITIALE ---
+st.set_page_config(page_title="Hartur IA", page_icon="🤖")
 
-st.set_page_config(
-    page_title="Hartur IA",
-    page_icon="🤖",
-    layout="wide"
-)
-
-# =========================================================
-# FIREBASE
-# =========================================================
-
+# Connexion à Firebase arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee
 if not firebase_admin._apps:
-
     try:
-
-        cred = credentials.Certificate(
-            'arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json'
-        )
-
+        cred = credentials.Certificate('arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json')
         firebase_admin.initialize_app(cred)
-
     except Exception as e:
-
-        st.error(f"Erreur Firebase : {e}")
+        st.error(f"Erreur de connexion Firebase : {e}")
 
 db = firestore.client()
 
-# =========================================================
-# API MISTRAL
-# =========================================================
+# Connexion à Gemini 1ZfLHQLAFzfUZkhilAQyYtxyqirdNhhx
+genai.configure(api_key="1ZfLHQLAFzfUZkhilAQyYtxyqirdNhhx", transport='rest', default_metadata=[('x-goog-api-client', 'gl-python/3.14.0')])
+# Configuration de Hartur avec ses instructions
+model = genai.GenerativeModel('gemini-pro')
+chat = model.start_chat(history=[])
+# --- STRUCTURE DE NAVIGATION ---
+menu = st.sidebar.selectbox("Navigation", ["Discussion avec Hartur", "Espace Admin"])
 
-try:
-    api_key = st.secrets["MISTRAL_KEY"]
-
-except:
-    api_key = "TA_CLE_POUR_TEST_LOCAL"
-
-# =========================================================
-# MOT DE PASSE ADMIN
-# =========================================================
-
-try:
-    ADMIN_PASSWORD = st.secrets["ADMIN_PASSWORD"]
-
-except:
-    ADMIN_PASSWORD = "babar"
-
-# =========================================================
-# IA
-# =========================================================
-
-def appeler_mistral(prompt):
-
-    p = prompt.lower()
-
-    # Réponse spéciale créateur
-    if any(word in p for word in [
-        "créateur",
-        "createur",
-        "qui t'a créé",
-        "qui t'a cree",
-        "qui t'a fait",
-        "qui est ton créateur",
-        "qui est ton createur",
-        "c'est qui ton créateur",
-        "c est qui ton createur"
-    ]):
-
-        return "Mon créateur est Zacharie Pays 😎"
-
-    url = "https://api.mistral.ai/v1/chat/completions"
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
-
-    instructions = (
-        "Tu es Hartur. "
-        "Tu parles comme un ado cool et sympa. "
-        "Tu fais des réponses courtes et naturelles."
-    )
-
-    data = {
-        "model": "open-mistral-7b",
-        "messages": [
-            {
-                "role": "system",
-                "content": instructions
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        "temperature": 0.8
-    }
-
-    try:
-
-        response = requests.post(
-            url,
-            headers=headers,
-            json=data
-        )
-
-        result = response.json()
-
-        return result['choices'][0]['message']['content']
-
-    except:
-
-        return "Désolé j'ai un bug 😅"
-
-# =========================================================
-# MENU
-# =========================================================
-
-menu = st.sidebar.selectbox(
-    "Navigation",
-    [
-        "Discussion avec Hartur",
-        "Espace Admin"
-    ]
-)
-
-# =========================================================
-# DISCUSSION
-# =========================================================
-
+# --- PAGE DE CHAT ---
 if menu == "Discussion avec Hartur":
-
     st.title("🤖 Parle avec Hartur !")
 
-    # Nom utilisateur
+    # 1. Demander le nom pour la sauvegarde
     if "nom" not in st.session_state:
-
-        nom_saisi = st.text_input("Ton nom ?")
-
-        if st.button("Go"):
-
-            if nom_saisi.strip() != "":
-
-                st.session_state.nom = nom_saisi
+        nom_saisi = st.text_input("Comment t'appelles-tu ?", placeholder="Ex: Marc")
+        if st.button("Commencer la discussion"):
+            if nom_saisi:
+                st.session_state.nom = nom_saisi.strip()
                 st.rerun()
-
     else:
-
-        # Historique
+        st.write(f"Connecté en tant que : *{st.session_state.nom}*")
+        
+        # 2. Charger l'historique depuis Firebase si c'est une reconnexion
         if "messages" not in st.session_state:
             st.session_state.messages = []
+            with st.spinner("Hartur recherche vos souvenirs... 🧠"):
+                docs = db.collection('discussions').where('nom', '==', st.session_state.nom).order_by('date').stream()
+                for doc in docs:
+                    data = doc.to_dict()
+                    st.session_state.messages.append({"role": "user", "content": data['texte']})
+                    st.session_state.messages.append({"role": "assistant", "content": data['reponse']})
 
-        # Affichage messages
+        # 3. Affichage des messages
         for m in st.session_state.messages:
-
             with st.chat_message(m["role"]):
-
                 st.markdown(m["content"])
 
-        # Nouveau message
-        if prompt := st.chat_input("Dis un truc..."):
-
-            st.session_state.messages.append({
-                "role": "user",
-                "content": prompt
-            })
-
+        # 4. Zone de saisie
+        if prompt := st.chat_input("Dis quelque chose à Hartur..."):
+            # Afficher le message utilisateur
+            st.session_state.messages.append({"role": "user", "content": prompt})
             with st.chat_message("user"):
-
                 st.markdown(prompt)
 
+            # Obtenir la réponse de Hartur
             with st.chat_message("assistant"):
+                response = chat.send_message(prompt)
+                reponse_ia = response.text
+                st.markdown(reponse_ia)
+                st.session_state.messages.append({"role": "assistant", "content": reponse_ia})
 
-                reponse = appeler_mistral(prompt)
+            # 5. SAUVEGARDE DANS FIREBASE
+            db.collection('discussions').add({
+                'nom': st.session_state.nom,
+                'texte': prompt,
+                'reponse': reponse_ia,
+                'date': datetime.now()
+            })
 
-                st.markdown(reponse)
-
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": reponse
-                })
-
-                # Sauvegarde Firebase
-                db.collection('discussions').add({
-
-                    'nom': st.session_state.nom,
-                    'texte': prompt,
-                    'reponse': reponse,
-                    'date': datetime.now()
-
-                })
-
-# =========================================================
-# ADMIN
-# =========================================================
-
+# --- PAGE ADMIN ---
 elif menu == "Espace Admin":
-
-    st.title("🔐 Admin")
-
-    # Session admin
-    if "admin_ok" not in st.session_state:
-        st.session_state.admin_ok = False
-
-    # Mot de passe
-    pwd = st.text_input(
-        "Mot de passe :",
-        type="password"
-    )
-
-    # Vérification
-    if pwd == ADMIN_PASSWORD:
-
-        st.session_state.admin_ok = True
-
-    # Accès admin
-    if st.session_state.admin_ok:
-
-        st.success("Connexion réussie ✅")
-
-        st.subheader("📂 Discussions sauvegardées")
-
-        # Récupération messages
-        msgs = db.collection('discussions') \
-            .order_by('date', direction='ASCENDING') \
-            .stream()
-
-        groupes = {}
-
-        for doc in msgs:
-
+    st.title("🔐 Panneau Administrateur")
+    pwd = st.text_input("Entrez le mot de passe admin :", type="password")
+    
+    if pwd == "babar":
+        st.success("Accès autorisé. Voici toutes les discussions enregistrées :")
+        
+        # Récupérer tout l'historique de tout le monde
+        tous_les_messages = db.collection('discussions').order_by('date', direction='DESCENDING').stream()
+        
+        for doc in tous_les_messages:
             d = doc.to_dict()
-
-            nom = d.get('nom', 'Inconnu')
-
-            if nom not in groupes:
-                groupes[nom] = []
-
-            groupes[nom].append(d)
-
-        # Affichage blocs utilisateurs
-        noms = list(groupes.keys())
-
-        cols = st.columns(3)
-
-        for i, nom in enumerate(noms):
-
-            with cols[i % 3]:
-
-                with st.container(border=True):
-
-                    st.markdown(f"### 👤 {nom}")
-
-                    st.write(
-                        f"{len(groupes[nom])} message(s)"
-                    )
-
-                    if st.button(
-                        "📖 Ouvrir",
-                        key=f"user_{nom}"
-                    ):
-
-                        st.session_state.selected_user = nom
-
-        # Conversation affichée
-        if "selected_user" in st.session_state:
-
-            utilisateur = st.session_state.selected_user
-
-            st.divider()
-
-            st.subheader(
-                f"💬 Conversation de {utilisateur}"
-            )
-
-            for c in groupes[utilisateur]:
-
-                with st.chat_message("user"):
-
-                    st.markdown(c['texte'])
-
-                with st.chat_message("assistant"):
-
-                    st.markdown(c['reponse'])
+            date_str = d['date'].strftime("%d/%m %H:%M")
+            with st.expander(f"👤 {d['nom']} - {date_str}"):
+                st.write(f"*Question :* {d['texte']}")
+                st.write(f"*Hartur :* {d['reponse']}")
+    elif pwd != "":
+        st.error("Mot de passe incorrect ❌")
