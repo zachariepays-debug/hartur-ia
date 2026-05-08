@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import uuid
 
 # ======================================================
 # ⚙️ CONFIG
@@ -25,26 +26,23 @@ if "username" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "admin_mode" not in st.session_state:
-    st.session_state.admin_mode = False
+if "role" not in st.session_state:
+    st.session_state.role = "user"   # 👈 user ou admin
 
 if "admin_popup" not in st.session_state:
     st.session_state.admin_popup = False
 
-# 🎭 PERSONNALISATION IA
-if "humeur" not in st.session_state:
-    st.session_state.humeur = "Cool"
-
-if "style" not in st.session_state:
-    st.session_state.style = "Normal"
-
 if "nom_ia" not in st.session_state:
     st.session_state.nom_ia = "Hartur"
+
+if "humeur" not in st.session_state:
+    st.session_state.humeur = "Cool"
 
 # ======================================================
 # 📁 USERS
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
+os.makedirs("data", exist_ok=True)
 
 def create_account(user, pwd):
     file = f"accounts/{user.lower()}.txt"
@@ -62,7 +60,7 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🔐 BOUTON ADMIN (EN HAUT DROITE)
+# 🔐 BOUTON ADMIN (VISIBLE TOUJOURS)
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
@@ -71,11 +69,11 @@ with col2:
         st.session_state.admin_popup = True
 
 # ======================================================
-# 🔐 POPUP ADMIN
+# 🔐 POPUP ADMIN (SÉPARÉ DU USER)
 # ======================================================
 if st.session_state.admin_popup:
 
-    st.warning("Accès Admin")
+    st.warning("🔐 Connexion Admin")
 
     mdp = st.text_input("Mot de passe", type="password")
 
@@ -85,9 +83,15 @@ if st.session_state.admin_popup:
         if st.button("Valider"):
 
             if mdp == "babar":
-                st.session_state.admin_mode = True
+
+                st.session_state.role = "admin"
                 st.session_state.admin_popup = False
+
+                st.success("Mode admin activé 🔓")
                 st.rerun()
+
+            else:
+                st.error("Mot de passe incorrect")
 
     with c2:
         if st.button("Annuler"):
@@ -104,10 +108,10 @@ if st.session_state.page == "home":
     st.title("🤖 Hartur IA")
 
     st.info("""
-✔ IA intelligente personnalisable  
+✔ IA intelligente  
 ✔ Comptes utilisateurs  
 ✔ Chat avec mémoire  
-✔ Mode admin  
+✔ Mode admin séparé  
 """)
 
     c1, c2 = st.columns(2)
@@ -129,7 +133,7 @@ if st.session_state.page == "home":
 # ======================================================
 if st.session_state.page == "signup":
 
-    st.subheader("Créer un compte")
+    st.subheader("Créer compte")
 
     u = st.text_input("Identifiant")
     p = st.text_input("Mot de passe", type="password")
@@ -141,7 +145,7 @@ if st.session_state.page == "signup":
             st.session_state.page = "login"
             st.rerun()
         else:
-            st.error("Identifiant déjà utilisé")
+            st.error("Déjà utilisé")
 
     if st.button("Retour"):
         st.session_state.page = "home"
@@ -166,6 +170,7 @@ if st.session_state.page == "login":
             st.session_state.logged_in = True
             st.session_state.username = u
             st.session_state.page = "chat"
+
             st.rerun()
 
         else:
@@ -185,41 +190,39 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
     st.title(f"🤖 {st.session_state.nom_ia}")
 
     st.sidebar.success(f"👤 {st.session_state.username}")
-
-    if st.sidebar.button("Déconnexion"):
-        st.session_state.logged_in = False
-        st.session_state.username = None
-        st.session_state.page = "home"
-        st.rerun()
+    st.sidebar.write(f"🎭 Humeur : {st.session_state.humeur}")
 
     # ==================================================
-    # ⚙️ PERSONNALISATION IA (VISIBLE UTILISATEUR)
+    # 🔓 ADMIN PANEL (UNIQUEMENT SI ROLE ADMIN)
     # ==================================================
-    st.sidebar.subheader("⚙️ Personnalisation IA")
+    if st.session_state.role == "admin":
 
-    st.session_state.humeur = st.sidebar.selectbox(
-        "Humeur",
-        ["Cool", "Drôle", "Gentil", "Sarcastique"]
-    )
+        st.subheader("🔐 ADMIN PANEL")
 
-    st.session_state.style = st.sidebar.selectbox(
-        "Style",
-        ["Normal", "Familier", "Poli"]
-    )
+        st.success("Mode administrateur actif")
+
+        st.write("✔ Comptes utilisateurs")
+        st.write("✔ Conversations globales")
+        st.write("✔ Logs système")
+
+        if st.button("Quitter admin"):
+            st.session_state.role = "user"
+            st.rerun()
+
+    # ==================================================
+    # ⚙️ PERSONNALISATION IA
+    # ==================================================
+    st.sidebar.subheader("⚙️ IA")
 
     st.session_state.nom_ia = st.sidebar.text_input(
         "Nom IA",
         st.session_state.nom_ia
     )
 
-    # ==================================================
-    # 🔐 ADMIN PANEL
-    # ==================================================
-    if st.session_state.admin_mode:
-        st.subheader("🔐 ADMIN MODE")
-        st.write("✔ Comptes")
-        st.write("✔ Conversations")
-        st.write("✔ Stats")
+    st.session_state.humeur = st.sidebar.selectbox(
+        "Humeur",
+        ["Cool", "Drôle", "Gentil", "Sarcastique"]
+    )
 
     # ==================================================
     # 💬 CHAT
@@ -237,7 +240,6 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
             "content": prompt
         })
 
-        # 🤖 réponse simple (à connecter IA après)
         reponse = f"({st.session_state.nom_ia}) répond en mode {st.session_state.humeur}"
 
         st.session_state.messages.append({
@@ -245,4 +247,14 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
             "content": reponse
         })
 
+        st.rerun()
+
+    # ==================================================
+    # 🚪 LOGOUT
+    # ==================================================
+    if st.sidebar.button("Déconnexion"):
+        st.session_state.logged_in = False
+        st.session_state.username = None
+        st.session_state.page = "home"
+        st.session_state.role = "user"
         st.rerun()
