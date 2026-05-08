@@ -3,11 +3,20 @@ import requests
 from datetime import datetime
 import uuid
 import os
+import random
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Hartur IA", page_icon="🤖")
+# ======================================================
+# ⚙️ CONFIG
+# ======================================================
+st.set_page_config(
+    page_title="Hartur IA",
+    page_icon="🤖",
+    layout="wide"
+)
 
-# --- SESSION STATE ---
+# ======================================================
+# 💾 SESSION
+# ======================================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -20,6 +29,8 @@ if "nom" not in st.session_state:
 if "admin_auth" not in st.session_state:
     st.session_state.admin_auth = False
 
+if "memory" not in st.session_state:
+    st.session_state.memory = {}
 
 # ======================================================
 # 🤖 MISTRAL
@@ -29,14 +40,61 @@ try:
 except Exception:
     api_key = None
 
+# ======================================================
+# 🎭 HUMEUR IA
+# ======================================================
+mood = st.sidebar.selectbox(
+    "😎 Humeur de Hartur",
+    ["Cool", "Drôle", "Gentil", "Sarcastique"]
+)
 
+# ======================================================
+# 🤖 IA
+# ======================================================
 def appeler_mistral(prompt):
+
+    # 🔥 COMMANDES RAPIDES
+    if prompt.lower() == "/clear":
+        st.session_state.messages = []
+        return "Conversation réinitialisée 😄"
+
+    if "ça va" in prompt.lower():
+        return "Ouiii 😄 et toi ?"
+
+    if "tu m'aimes" in prompt.lower():
+        return "Évidemment 🤖❤️"
+
+    if "qui t'a créé" in prompt.lower():
+        return "J'ai été créé par Zacharie Pays 🤖"
+
+    # 🧠 MÉMOIRE
+    if "mon âge est" in prompt.lower():
+        age = prompt.split("est")[-1].strip()
+        st.session_state.memory["age"] = age
+        return f"Okay 😄 je retiens que tu as {age} ans."
+
+    if "quel âge j'ai" in prompt.lower():
+        if "age" in st.session_state.memory:
+            return f"Tu as {st.session_state.memory['age']} ans 😄"
+        else:
+            return "Tu ne me l'as pas encore dit 👀"
+
+    # 🎮 MINI JEU
+    if prompt.lower() == "/dice":
+        return f"🎲 Tu as obtenu : {random.randint(1,6)}"
+
     if not api_key:
         return "Erreur : clé API manquante."
 
-    # Réponse créateur
-    if any(x in prompt.lower() for x in ["qui t'a créé", "ton créateur"]):
-        return "J'ai été créé par Zacharie Pays 🤖"
+    # 🎭 humeur
+    humeur_prompt = {
+        "Cool": "Tu es Hartur, un ado cool et sympa.",
+        "Drôle": "Tu es Hartur, très drôle et amusant.",
+        "Gentil": "Tu es Hartur, très gentil et bienveillant.",
+        "Sarcastique": "Tu es Hartur, sarcastique mais drôle."
+    }
+
+    system_prompt = humeur_prompt[mood]
 
     url = "https://api.mistral.ai/v1/chat/completions"
 
@@ -49,7 +107,7 @@ def appeler_mistral(prompt):
         "messages": [
             {
                 "role": "system",
-                "content": "Tu es Hartur, un ado cool et sympa."
+                "content": system_prompt
             },
             {
                 "role": "user",
@@ -59,30 +117,34 @@ def appeler_mistral(prompt):
     }
 
     try:
-        r = requests.post(url, headers=headers, json=data, timeout=20)
+        r = requests.post(
+            url,
+            headers=headers,
+            json=data,
+            timeout=20
+        )
+
         return r.json()['choices'][0]['message']['content']
 
     except Exception:
-        return "Petit bug avec l'IA."
+        return "Petit bug avec l'IA 😅"
 
 
 # ======================================================
-# 💾 SAUVEGARDE
+# 💾 SAVE
 # ======================================================
-def get_user_file(nom):
+def save_message(nom, session_id, user, ia):
+
     date_folder = datetime.utcnow().strftime("%Y-%m-%d")
 
     os.makedirs(f"data/{date_folder}", exist_ok=True)
 
-    return f"data/{date_folder}/{nom.lower().replace(' ', '_')}.txt"
-
-
-def save_message(nom, session_id, user, ia):
-    filename = get_user_file(nom)
+    filename = f"data/{date_folder}/{nom.lower().replace(' ', '_')}.txt"
 
     date_now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
     with open(filename, "a", encoding="utf-8") as f:
+
         f.write(f"\n📅 {date_now} | SESSION: {session_id}\n")
         f.write(f"[USER] {user}\n")
         f.write(f"[IA] {ia}\n")
@@ -90,9 +152,10 @@ def save_message(nom, session_id, user, ia):
 
 
 # ======================================================
-# 📂 CHARGER ANCIENNES DISCUSSIONS
+# 📂 LOAD
 # ======================================================
 def load_old_messages(nom):
+
     messages = []
 
     if not os.path.exists("data"):
@@ -100,18 +163,22 @@ def load_old_messages(nom):
 
     nom_fichier = nom.lower().replace(" ", "_") + ".txt"
 
-    # 🔥 on cherche dans tous les dossiers dates
     for date_folder in sorted(os.listdir("data")):
+
         folder_path = f"data/{date_folder}"
 
         if os.path.isdir(folder_path):
+
             file_path = f"{folder_path}/{nom_fichier}"
 
             if os.path.exists(file_path):
+
                 with open(file_path, "r", encoding="utf-8") as f:
+
                     lines = f.readlines()
 
                     for line in lines:
+
                         line = line.strip()
 
                         if line.startswith("[USER]"):
@@ -137,7 +204,6 @@ menu = st.sidebar.selectbox(
     ["💬 Discussion", "🔐 Admin"]
 )
 
-
 # ======================================================
 # 💬 DISCUSSION
 # ======================================================
@@ -145,10 +211,14 @@ if menu == "💬 Discussion":
 
     st.title("🤖 Hartur IA")
 
-    # 👤 CONNEXION
+    st.sidebar.write(
+        datetime.now().strftime("🕒 %H:%M")
+    )
+
+    # 👤 connexion
     if st.session_state.nom is None:
 
-        nom = st.text_input("Ton prénom :")
+        nom = st.text_input("Ton prénom ou pseudo :")
 
         if st.button("Lancer"):
 
@@ -161,16 +231,26 @@ if menu == "💬 Discussion":
                     st.session_state.nom
                 )
 
-                # nouvelle session
                 st.session_state.session_id = str(uuid.uuid4())
 
                 st.rerun()
 
     else:
 
+        st.success(f"Salut {st.session_state.nom} 😄")
+
         st.sidebar.write(f"👤 {st.session_state.nom}")
 
-        # 🔥 affichage historique
+        # 📸 image
+        image = st.file_uploader(
+            "📸 Envoie une image",
+            type=["png", "jpg", "jpeg"]
+        )
+
+        if image:
+            st.image(image)
+
+        # 💬 historique
         for m in st.session_state.messages:
 
             with st.chat_message(m["role"]):
@@ -208,7 +288,6 @@ if menu == "💬 Discussion":
                 reponse
             )
 
-
 # ======================================================
 # 🔐 ADMIN
 # ======================================================
@@ -226,6 +305,7 @@ elif menu == "🔐 Admin":
         if st.button("Connexion"):
 
             if pwd == "babar":
+
                 st.session_state.admin_auth = True
                 st.rerun()
 
@@ -236,11 +316,13 @@ elif menu == "🔐 Admin":
 
         st.success("Connecté 🔓")
 
-        st.subheader("📂 Conversations par date")
+        st.subheader("📂 Conversations")
 
         os.makedirs("data", exist_ok=True)
 
         dates = sorted(os.listdir("data"), reverse=True)
+
+        total_users = 0
 
         if not dates:
 
@@ -257,6 +339,8 @@ elif menu == "🔐 Admin":
                     with st.expander(f"📅 {date}"):
 
                         files = os.listdir(date_path)
+
+                        total_users += len(files)
 
                         if not files:
 
@@ -287,6 +371,8 @@ elif menu == "🔐 Admin":
                                         st.text(f.read())
 
                                     st.divider()
+
+        st.sidebar.write(f"👥 Utilisateurs : {total_users}")
 
         if st.button("Déconnexion"):
 
