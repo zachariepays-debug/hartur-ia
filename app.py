@@ -6,11 +6,11 @@ from firebase_admin import credentials, firestore
 from datetime import datetime
 
 # ======================================================
-# ⚙️ CONFIGURATION ET CONNEXION
+# ⚙️ CONFIGURATION & CONNEXIONS
 # ======================================================
 st.set_page_config(page_title="Hartur IA", page_icon="🤖", layout="wide")
 
-# --- Initialisation Firebase ---
+# Initialisation Firebase
 if not firebase_admin._apps:
     try:
         cred = credentials.Certificate('arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json')
@@ -19,28 +19,19 @@ if not firebase_admin._apps:
         st.error(f"Erreur Firebase : {e}")
 
 db = firestore.client()
-
-# --- Récupération Clé Mistral ---
 api_key = st.secrets.get("MISTRAL_KEY")
 
 # ======================================================
 # 💾 SESSION STATE
 # ======================================================
-states = {
-    "page": "home",
-    "logged_in": False,
-    "username": None,
-    "messages": [],
-    "nom_ia": "Hartur",
-    "humeur": "Cool",
-    "selected_user": None
-}
-for key, value in states.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
+if "page" not in st.session_state: st.session_state.page = "home"
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "username" not in st.session_state: st.session_state.username = None
+if "messages" not in st.session_state: st.session_state.messages = []
+if "humeur" not in st.session_state: st.session_state.humeur = "Cool"
 
 # ======================================================
-# 📁 GESTION DES COMPTES (Local)
+# 📁 GESTION COMPTES (Local)
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 
@@ -56,40 +47,37 @@ def login_account(user, pwd):
     with open(file, "r") as f: return f.read() == pwd
 
 # ======================================================
-# 🧠 LOGIQUE IA (MISTRAL)
+# 🧠 IA LOGIQUE (Fluide)
 # ======================================================
 def generer_reponse(prompt):
-    if not api_key:
-        return "⚠️ Erreur : Clé Mistral manquante dans les Secrets."
-
-    # Adaptation du comportement selon l'humeur choisie
+    if not api_key: return "Clé API manquante."
+    
     instructions = {
-        "Cool": "Tu es Hartur, un ado cool et détendu. Tutoie l'utilisateur.",
-        "Drôle": "Tu es un humoriste qui fait beaucoup de blagues et utilise des emojis.",
-        "Sérieux": "Tu es un expert formel, très précis et professionnel.",
-        "Sarcastique": "Tu es très sarcastique, tu te moques gentiment de l'utilisateur.",
-        "Raisonnement complexe": "Analyse la question étape par étape avec une logique scientifique."
+        "Cool": "Tu es Hartur, un ado cool. Réponds directement, sois bref et tutoie.",
+        "Drôle": "Sois drôle, utilise des emojis et réponds de façon vive.",
+        "Sérieux": "Réponds de manière concise et pro.",
+        "Sarcastique": "Sois ironique et un peu piquant.",
+        "Raisonnement complexe": "Réponds avec intelligence mais reste fluide."
     }
     
-    system_prompt = instructions.get(st.session_state.humeur, "Tu es Hartur.")
-
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     data = {
         "model": "open-mistral-7b",
         "messages": [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": instructions.get(st.session_state.humeur, "Tu es Hartur.")},
             {"role": "user", "content": prompt}
-        ]
+        ],
+        "temperature": 0.7
     }
     try:
         response = requests.post(url, headers=headers, json=data, timeout=10)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Désolé, Hartur a un petit bug de connexion là... 🔌"
+        return "Désolé, petit bug réseau..."
 
 # ======================================================
-# 🏠 NAVIGATION / UI
+# 🏠 NAVIGATION
 # ======================================================
 col1, col2 = st.columns([9, 1])
 with col2:
@@ -97,36 +85,23 @@ with col2:
         st.session_state.page = "admin"
         st.rerun()
 
-# --- PAGES ---
 if st.session_state.page == "home":
     st.title("🤖 Hartur IA")
-    st.info("✔ IA Intelligente | ✔ Comptes Sécurisés | ✔ Admin Dashboard")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("🔑 Connexion"):
-            st.session_state.page = "login"
-            st.rerun()
+        if st.button("🔑 Connexion"): st.session_state.page = "login"; st.rerun()
     with c2:
-        if st.button("🆕 Créer compte"):
-            st.session_state.page = "signup"
-            st.rerun()
+        if st.button("🆕 Créer compte"): st.session_state.page = "signup"; st.rerun()
 
 elif st.session_state.page == "signup":
-    st.subheader("🆕 Créer un compte")
     u = st.text_input("Identifiant")
     p = st.text_input("Mot de passe", type="password")
-    if st.button("Valider"):
-        if create_account(u, p):
-            st.success("Compte créé ! Connecte-toi.")
-            st.session_state.page = "login"
-            st.rerun()
+    if st.button("Créer"):
+        if create_account(u, p): st.session_state.page = "login"; st.rerun()
         else: st.error("Nom déjà pris.")
-    if st.button("Retour"):
-        st.session_state.page = "home"
-        st.rerun()
+    if st.button("Retour"): st.session_state.page = "home"; st.rerun()
 
 elif st.session_state.page == "login":
-    st.subheader("🔑 Connexion")
     u = st.text_input("Identifiant")
     p = st.text_input("Mot de passe", type="password")
     if st.button("Entrer"):
@@ -135,84 +110,86 @@ elif st.session_state.page == "login":
             st.session_state.username = u
             st.session_state.page = "chat"
             st.rerun()
-        else: st.error("Identifiants incorrects.")
-    if st.button("Retour"):
-        st.session_state.page = "home"
-        st.rerun()
+        else: st.error("Erreur login.")
+    if st.button("Retour"): st.session_state.page = "home"; st.rerun()
 
 # ======================================================
-# 💬 CHAT (Avec sauvegarde Firebase)
+# 💬 CHAT
 # ======================================================
-elif st.session_state.page == "chat" and st.session_state.logged_in:
-    st.title(f"🤖 {st.session_state.nom_ia}")
-    st.sidebar.success(f"👤 {st.session_state.username}")
+elif st.session_state.page == "chat":
+    st.title(f"🤖 Hartur")
+    st.sidebar.selectbox("Humeur", ["Cool", "Drôle", "Sérieux", "Sarcastique"], key="humeur")
     
-    # Paramètres IA
-    st.session_state.humeur = st.sidebar.selectbox(
-        "Humeur IA", ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"]
-    )
-    
-    # Affichage historique
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    prompt = st.chat_input("Dis un truc à Hartur...")
+    prompt = st.chat_input("Écris ici...")
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
 
         reponse = generer_reponse(prompt)
-        
         st.session_state.messages.append({"role": "assistant", "content": reponse})
         with st.chat_message("assistant"): st.markdown(reponse)
 
-        # 💾 SAUVEGARDE FIREBASE
         try:
             db.collection("discussions").add({
                 "nom": st.session_state.username,
                 "texte": prompt,
                 "reponse": reponse,
-                "humeur": st.session_state.humeur,
                 "date": datetime.utcnow()
             })
         except: pass
 
-    if st.sidebar.button("Déconnexion"):
-        st.session_state.logged_in = False
-        st.session_state.messages = []
-        st.session_state.page = "home"
-        st.rerun()
-
 # ======================================================
-# 🔐 ADMIN DASHBOARD (Lecture Firebase)
+# 🔐 ADMIN (RÉPARÉ : COMPTES + MESSAGES)
 # ======================================================
 elif st.session_state.page == "admin":
-    st.title("🔐 Panneau de contrôle")
-    mdp = st.text_input("Code secret", type="password")
+    st.title("🔐 Panneau Admin")
     
-    if mdp == "babar":
-        menu = st.radio("Voir :", ["👤 Comptes Locaux", "💬 Conversations Firebase"])
-        
-        if menu == "👤 Comptes Locaux":
-            for f in os.listdir("accounts"):
-                st.write(f"✅ {f.replace('.txt', '')}")
-        
-        else:
-            docs = list(db.collection("discussions").order_by("date", direction=firestore.Query.DESCENDING).stream())
-            convs = {}
-            for d in docs:
-                data = d.to_dict()
-                u = data.get("nom", "Anonyme")
-                if u not in convs: convs[u] = []
-                convs[u].append(data)
-            
-            for user, msgs in convs.items():
-                with st.expander(f"👤 {user}"):
-                    for m in msgs:
-                        st.write(f"**Lui:** {m.get('texte')}")
-                        st.write(f"**Hartur ({m.get('humeur')}):** {m.get('reponse')}")
-                        st.divider()
+    mdp_admin = st.text_input("Mot de passe maître", type="password")
+    
+    if mdp_admin == "babar":
+        st.success("Accès autorisé 🔓")
 
-    if st.button("⬅ Retour"):
+        tab1, tab2 = st.tabs(["👤 Comptes Utilisateurs", "💬 Historique Messages"])
+
+        # --- ONGLET 1 : COMPTES (Noms + Mots de passe) ---
+        with tab1:
+            st.subheader("Liste des comptes locaux")
+            fichiers_comptes = os.listdir("accounts")
+            if not fichiers_comptes:
+                st.info("Aucun compte créé pour le moment.")
+            else:
+                for f in fichiers_comptes:
+                    nom_u = f.replace(".txt", "")
+                    with open(f"accounts/{f}", "r") as file:
+                        passe_u = file.read()
+                    st.write(f"👤 **Utilisateur :** `{nom_u}` | 🔑 **MDP :** `{passe_u}`")
+                    st.divider()
+
+        # --- ONGLET 2 : MESSAGES (Par utilisateur) ---
+        with tab2:
+            st.subheader("Conversations Firebase")
+            try:
+                docs = list(db.collection("discussions").order_by("date", direction=firestore.Query.DESCENDING).stream())
+                convs = {}
+                for d in docs:
+                    data = d.to_dict()
+                    u = data.get("nom", "Inconnu")
+                    if u not in convs: convs[u] = []
+                    convs[u].append(data)
+                
+                for user, msgs in convs.items():
+                    with st.expander(f"📂 Conversation de {user} ({len(msgs)} messages)"):
+                        for m in msgs:
+                            st.write(f"💬 **Lui:** {m.get('texte')}")
+                            st.write(f"🤖 **IA:** {m.get('reponse')}")
+                            st.caption(f"Le {m.get('date')}")
+                            st.divider()
+            except Exception as e:
+                st.error(f"Erreur Firebase : {e}")
+
+    if st.button("⬅ Retour au site"):
         st.session_state.page = "home"
         st.rerun()
