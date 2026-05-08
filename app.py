@@ -1,258 +1,295 @@
-# ======================================================
-# 👤 COMPTES UTILISATEURS
-# ======================================================
+import streamlit as st
+import requests
+from datetime import datetime
+import uuid
+import os
+import random
 
-# SESSION
+# ======================================================
+# ⚙️ CONFIG
+# ======================================================
+st.set_page_config(
+    page_title="Hartur IA",
+    page_icon="🤖",
+    layout="wide"
+)
+
+# ======================================================
+# 🎨 STYLE SIMPLE
+# ======================================================
+st.markdown("""
+<style>
+.stApp {
+    background-color: #0f1117;
+    color: white;
+}
+.big-title {
+    text-align: center;
+    font-size: 45px;
+    font-weight: bold;
+    color: #60a5fa;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ======================================================
+# 💾 SESSION
+# ======================================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
 if "username" not in st.session_state:
     st.session_state.username = None
 
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
 if "show_popup" not in st.session_state:
     st.session_state.show_popup = True
 
-
 # ======================================================
-# 📂 DOSSIERS
+# 📁 DOSSIERS
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 os.makedirs("data", exist_ok=True)
 
+# ======================================================
+# 🤖 IA API
+# ======================================================
+try:
+    api_key = st.secrets["MISTRAL_KEY"]
+except:
+    api_key = None
+
+def appeler_mistral(prompt):
+
+    if not api_key:
+        return "Clé API manquante."
+
+    url = "https://api.mistral.ai/v1/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    data = {
+        "model": "open-mistral-7b",
+        "messages": [
+            {"role": "system", "content": "Tu es Hartur, un assistant IA cool."},
+            {"role": "user", "content": prompt}
+        ]
+    }
+
+    try:
+        r = requests.post(url, headers=headers, json=data, timeout=20)
+        return r.json()['choices'][0]['message']['content']
+    except:
+        return "Erreur IA."
 
 # ======================================================
-# 💾 CREATION COMPTE
+# 👤 COMPTES
 # ======================================================
-def create_account(username, password):
+def create_account(user, pwd):
 
-    username = username.lower().strip()
+    file = f"accounts/{user.lower()}.txt"
 
-    # 🔥 empêche doublons
-    if os.path.exists(f"accounts/{username}.txt"):
+    if os.path.exists(file):
         return False
 
-    with open(f"accounts/{username}.txt", "w", encoding="utf-8") as f:
-
-        f.write(f"IDENTIFIANT:{username}\n")
-        f.write(f"MOTDEPASSE:{password}\n")
-        f.write(f"DATE:{datetime.utcnow()}\n")
+    with open(file, "w") as f:
+        f.write(pwd)
 
     return True
 
 
-# ======================================================
-# 🔑 CONNEXION
-# ======================================================
-def login_account(username, password):
+def login_account(user, pwd):
 
-    username = username.lower().strip()
+    file = f"accounts/{user.lower()}.txt"
 
-    try:
+    if not os.path.exists(file):
+        return False
 
-        with open(
-            f"accounts/{username}.txt",
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            content = f.read()
-
-            saved_password = content.split(
-                "MOTDEPASSE:"
-            )[1].split("\n")[0]
-
-            if saved_password == password:
-                return True
-
-    except:
-        pass
-
-    return False
-
+    with open(file, "r") as f:
+        return f.read() == pwd
 
 # ======================================================
-# 💬 FENETRE DESCRIPTION
+# 💾 CHAT SAVE
+# ======================================================
+def save_message(user, session_id, user_msg, ia_msg):
+
+    date_folder = datetime.utcnow().strftime("%Y-%m-%d")
+    os.makedirs(f"data/{date_folder}", exist_ok=True)
+
+    file = f"data/{date_folder}/{user.lower()}.txt"
+
+    time = datetime.utcnow().strftime("%H:%M:%S")
+
+    with open(file, "a") as f:
+        f.write(f"\n[{time}] SESSION:{session_id}\n")
+        f.write(f"USER: {user_msg}\n")
+        f.write(f"IA: {ia_msg}\n")
+        f.write("-"*40)
+
+# ======================================================
+# 📥 LOAD CHAT
+# ======================================================
+def load_messages(user):
+
+    msgs = []
+
+    if not os.path.exists("data"):
+        return msgs
+
+    for d in os.listdir("data"):
+
+        path = f"data/{d}/{user.lower()}.txt"
+
+        if os.path.exists(path):
+
+            with open(path, "r") as f:
+
+                for line in f:
+
+                    if line.startswith("USER:"):
+                        msgs.append({"role": "user", "content": line[6:].strip()})
+
+                    if line.startswith("IA:"):
+                        msgs.append({"role": "assistant", "content": line[3:].strip()})
+
+    return msgs
+
+# ======================================================
+# 🔐 POPUP
 # ======================================================
 if st.session_state.show_popup:
 
-    with st.container():
+    st.info("""
+🤖 Hartur IA
 
-        st.info("""
-# 🤖 Bienvenue sur Hartur IA
-
-### Fonctionnalités :
-• IA personnalisable  
-• Mémoire des discussions  
-• Historique automatique  
-• Upload d'images  
-• Modes et personnalités  
-
-👉 Crée un compte ou connecte-toi 😄
+✔ Chat IA personnalisé  
+✔ Comptes utilisateurs  
+✔ Historique sauvegardé  
+✔ Personnalisation IA  
 """)
 
-        if st.button("❌ Fermer"):
-
-            st.session_state.show_popup = False
-            st.rerun()
-
+    if st.button("❌ Fermer"):
+        st.session_state.show_popup = False
+        st.rerun()
 
 # ======================================================
-# 👤 CONNEXION / CREATION
+# 🔐 LOGIN / REGISTER
 # ======================================================
 if not st.session_state.logged_in:
 
+    st.markdown("<div class='big-title'>Connexion</div>", unsafe_allow_html=True)
+
     col1, col2 = st.columns(2)
 
-    # ==================================================
-    # 🔑 CONNEXION
-    # ==================================================
     with col1:
 
-        st.subheader("🔑 Se connecter")
+        st.subheader("🔑 Connexion")
 
-        login_user = st.text_input(
-            "Identifiant",
-            key="login_user"
-        )
+        u = st.text_input("Identifiant", key="login_u")
+        p = st.text_input("Mot de passe", type="password", key="login_p")
 
-        login_pass = st.text_input(
-            "Mot de passe",
-            type="password",
-            key="login_pass"
-        )
+        if st.button("Se connecter"):
 
-        if st.button("Connexion"):
-
-            if login_account(login_user, login_pass):
+            if login_account(u, p):
 
                 st.session_state.logged_in = True
-                st.session_state.username = login_user
-
-                # 🔥 recharge historique
-                st.session_state.messages = load_old_messages(
-                    login_user
-                )
-
-                st.success("Connexion réussie 😄")
+                st.session_state.username = u
+                st.session_state.messages = load_messages(u)
 
                 st.rerun()
 
             else:
-                st.error("Identifiant ou mot de passe incorrect")
+                st.error("Erreur login")
 
-
-    # ==================================================
-    # 🆕 CREER COMPTE
-    # ==================================================
     with col2:
 
-        st.subheader("🆕 Créer un compte")
+        st.subheader("🆕 Créer compte")
 
-        new_user = st.text_input(
-            "Choisir un identifiant",
-            key="new_user"
-        )
+        nu = st.text_input("Identifiant", key="new_u")
+        np = st.text_input("Mot de passe", type="password", key="new_p")
 
-        new_pass = st.text_input(
-            "Choisir un mot de passe",
-            type="password",
-            key="new_pass"
-        )
+        if st.button("Créer"):
 
-        if st.button("Créer le compte"):
-
-            if len(new_user.strip()) < 3:
-
-                st.error("Identifiant trop court")
-
-            elif len(new_pass.strip()) < 3:
-
-                st.error("Mot de passe trop court")
-
+            if create_account(nu, np):
+                st.success("Compte créé")
             else:
-
-                created = create_account(
-                    new_user,
-                    new_pass
-                )
-
-                if created:
-
-                    st.success("Compte créé 😄")
-
-                else:
-
-                    st.error(
-                        "Cet identifiant existe déjà ❌"
-                    )
+                st.error("Déjà existant")
 
     st.stop()
 
-
 # ======================================================
-# 👤 USER CONNECTE
+# 👤 USER CONNECTÉ
 # ======================================================
-st.sidebar.success(
-    f"👤 Connecté : {st.session_state.username}"
-)
+st.sidebar.success(f"👤 {st.session_state.username}")
 
-if st.sidebar.button("🚪 Déconnexion"):
-
+if st.sidebar.button("Déconnexion"):
     st.session_state.logged_in = False
     st.session_state.username = None
     st.session_state.messages = []
+    st.rerun()
+
+# ======================================================
+# 💬 CHAT
+# ======================================================
+st.markdown("<div class='big-title'>🤖 Hartur IA</div>", unsafe_allow_html=True)
+
+for m in st.session_state.messages:
+
+    with st.chat_message(m["role"]):
+        st.markdown(m["content"])
+
+prompt = st.chat_input("Écris ici...")
+
+if prompt:
+
+    st.session_state.messages.append({
+        "role": "user",
+        "content": prompt
+    })
+
+    reponse = appeler_mistral(prompt)
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": reponse
+    })
+
+    save_message(
+        st.session_state.username,
+        st.session_state.session_id,
+        prompt,
+        reponse
+    )
 
     st.rerun()
 
-
 # ======================================================
-# 💾 SAVE MODIF
+# 🔐 ADMIN
 # ======================================================
-# ⚠️ remplace :
-# st.session_state.nom
-#
-# PAR :
-# st.session_state.username
+st.sidebar.markdown("## 🔐 Admin")
 
-# Exemple :
+if st.sidebar.text_input("Mot de passe admin", type="password") == "babar":
 
-# save_message(
-#     st.session_state.username,
-#     st.session_state.session_id,
-#     prompt,
-#     reponse
-# )
+    st.sidebar.success("Admin OK")
 
+    st.subheader("👤 Comptes")
 
-# ======================================================
-# 🔐 ADMIN AJOUT COMPTES
-# ======================================================
-# 👉 AJOUTE ÇA dans ton onglet ADMIN
+    for f in os.listdir("accounts"):
+        st.write(f)
 
-st.subheader("👤 Comptes créés")
+    st.subheader("💬 Conversations")
 
-os.makedirs("accounts", exist_ok=True)
+    for d in os.listdir("data"):
 
-account_files = os.listdir("accounts")
+        st.write("📅", d)
 
-if not account_files:
+        for f in os.listdir(f"data/{d}"):
 
-    st.info("Aucun compte.")
-
-else:
-
-    for file in account_files:
-
-        if file.endswith(".txt"):
-
-            username = file.replace(".txt", "")
-
-            with st.expander(f"👤 {username}"):
-
-                with open(
-                    f"accounts/{file}",
-                    "r",
-                    encoding="utf-8"
-                ) as f:
-
-                    st.text(f.read())
+            st.write("👤", f)
