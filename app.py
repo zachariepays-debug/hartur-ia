@@ -1,8 +1,6 @@
 import streamlit as st
-import requests
-from datetime import datetime
-import uuid
 import os
+import uuid
 
 # ======================================================
 # ⚙️ CONFIG
@@ -14,13 +12,10 @@ st.set_page_config(
 )
 
 # ======================================================
-# 🔐 SESSION
+# 💾 SESSION
 # ======================================================
-if "admin_mode" not in st.session_state:
-    st.session_state.admin_mode = False
-
-if "admin_popup" not in st.session_state:
-    st.session_state.admin_popup = False
+if "page" not in st.session_state:
+    st.session_state.page = "home"  # home / login / signup / chat
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -28,16 +23,55 @@ if "logged_in" not in st.session_state:
 if "username" not in st.session_state:
     st.session_state.username = None
 
+if "admin_mode" not in st.session_state:
+    st.session_state.admin_mode = False
+
+if "admin_popup" not in st.session_state:
+    st.session_state.admin_popup = False
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # ======================================================
-# 🔐 BOUTON ADMIN (EN HAUT À DROITE)
+# 📁 USERS FILES
+# ======================================================
+os.makedirs("accounts", exist_ok=True)
+
+# ======================================================
+# 👤 CREATE ACCOUNT
+# ======================================================
+def create_account(user, pwd):
+
+    file = f"accounts/{user.lower()}.txt"
+
+    if os.path.exists(file):
+        return False
+
+    with open(file, "w") as f:
+        f.write(pwd)
+
+    return True
+
+# ======================================================
+# 🔑 LOGIN
+# ======================================================
+def login_account(user, pwd):
+
+    file = f"accounts/{user.lower()}.txt"
+
+    if not os.path.exists(file):
+        return False
+
+    with open(file, "r") as f:
+        return f.read() == pwd
+
+# ======================================================
+# 🔐 BOUTON ADMIN
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
 with col2:
-    if st.button("🔐 Admin"):
+    if st.button("🔐"):
         st.session_state.admin_popup = True
 
 # ======================================================
@@ -45,25 +79,21 @@ with col2:
 # ======================================================
 if st.session_state.admin_popup:
 
-    st.warning("🔐 Accès Admin")
+    st.warning("Mode Admin")
 
-    mdp = st.text_input("Mot de passe admin", type="password")
+    mdp = st.text_input("Mot de passe", type="password")
 
-    col1, col2 = st.columns(2)
+    c1, c2 = st.columns(2)
 
-    with col1:
+    with c1:
         if st.button("Valider"):
 
             if mdp == "babar":
                 st.session_state.admin_mode = True
                 st.session_state.admin_popup = False
-                st.success("Mode admin activé 🔓")
                 st.rerun()
 
-            else:
-                st.error("Mot de passe incorrect")
-
-    with col2:
+    with c2:
         if st.button("Annuler"):
             st.session_state.admin_popup = False
             st.rerun()
@@ -71,75 +101,139 @@ if st.session_state.admin_popup:
     st.stop()
 
 # ======================================================
-# 💬 INTERFACE PRINCIPALE
+# 🏠 PAGE D'ACCUEIL (DESCRIPTION IA)
 # ======================================================
-st.title("🤖 Hartur IA")
+if st.session_state.page == "home":
 
-# ======================================================
-# 👤 CONNEXION SIMPLE
-# ======================================================
-if not st.session_state.logged_in:
+    st.title("🤖 Hartur IA")
 
-    st.subheader("Connexion")
+    st.info("""
+Bienvenue sur Hartur IA 👋
 
-    user = st.text_input("Identifiant")
-    pwd = st.text_input("Mot de passe", type="password")
+✔ Une IA intelligente  
+✔ Chat personnalisé  
+✔ Comptes utilisateurs  
+✔ Mémoire des conversations  
 
-    if st.button("Se connecter"):
+👉 Choisis une option ci-dessous
+""")
 
-        if user and pwd:
+    c1, c2 = st.columns(2)
 
-            st.session_state.logged_in = True
-            st.session_state.username = user
+    with c1:
+        if st.button("🔑 Se connecter"):
+            st.session_state.page = "login"
+            st.rerun()
 
-            st.success("Connecté 😄")
+    with c2:
+        if st.button("🆕 Créer un compte"):
+            st.session_state.page = "signup"
             st.rerun()
 
     st.stop()
 
 # ======================================================
-# 👤 USER CONNECTÉ
+# 🆕 CREER COMPTE
 # ======================================================
-st.sidebar.success(f"👤 {st.session_state.username}")
+if st.session_state.page == "signup":
 
-if st.sidebar.button("Déconnexion"):
-    st.session_state.logged_in = False
-    st.session_state.username = None
-    st.session_state.messages = []
-    st.rerun()
+    st.subheader("🆕 Créer un compte")
+
+    user = st.text_input("Identifiant")
+    pwd = st.text_input("Mot de passe", type="password")
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        if st.button("Créer"):
+
+            if create_account(user, pwd):
+
+                st.success("Compte créé 😄")
+                st.session_state.page = "login"
+                st.rerun()
+
+            else:
+                st.error("Identifiant déjà utilisé")
+
+    with c2:
+        if st.button("Retour"):
+            st.session_state.page = "home"
+            st.rerun()
+
+    st.stop()
 
 # ======================================================
-# 🔐 MODE ADMIN
+# 🔑 LOGIN PAGE
 # ======================================================
-if st.session_state.admin_mode:
+if st.session_state.page == "login":
 
-    st.subheader("🔐 PANEL ADMIN")
+    st.subheader("🔑 Connexion")
 
-    st.info("Ici tu pourras afficher comptes + conversations")
+    user = st.text_input("Identifiant")
+    pwd = st.text_input("Mot de passe", type="password")
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        if st.button("Connexion"):
+
+            if login_account(user, pwd):
+
+                st.session_state.logged_in = True
+                st.session_state.username = user
+                st.session_state.page = "chat"
+                st.rerun()
+
+            else:
+                st.error("Identifiants incorrects")
+
+    with c2:
+        if st.button("Retour"):
+            st.session_state.page = "home"
+            st.rerun()
+
+    st.stop()
 
 # ======================================================
-# 💬 CHAT
+# 💬 CHAT PAGE
 # ======================================================
-for m in st.session_state.messages:
+if st.session_state.page == "chat" and st.session_state.logged_in:
 
-    with st.chat_message(m["role"]):
-        st.markdown(m["content"])
+    st.title("🤖 Hartur IA")
 
-prompt = st.chat_input("Écris ici...")
+    st.sidebar.success(f"👤 {st.session_state.username}")
 
-if prompt:
+    if st.sidebar.button("Déconnexion"):
+        st.session_state.logged_in = False
+        st.session_state.username = None
+        st.session_state.page = "home"
+        st.rerun()
 
-    st.session_state.messages.append({
-        "role": "user",
-        "content": prompt
-    })
+    # ADMIN MODE
+    if st.session_state.admin_mode:
+        st.subheader("🔐 ADMIN PANEL")
+        st.write("Comptes + stats ici")
 
-    # simulation IA
-    reponse = "Réponse IA (à connecter)"
+    # CHAT
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
 
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": reponse
-    })
+    prompt = st.chat_input("Écris ici...")
 
-    st.rerun()
+    if prompt:
+
+        st.session_state.messages.append({
+            "role": "user",
+            "content": prompt
+        })
+
+        reponse = "IA réponse (à connecter)"
+
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": reponse
+        })
+
+        st.rerun()
