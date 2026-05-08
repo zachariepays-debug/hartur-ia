@@ -56,7 +56,7 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🔐 ADMIN BUTTON
+# 🔐 ADMIN BOUTON
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
@@ -126,46 +126,55 @@ if st.session_state.page == "login":
     if st.button("Connexion"):
 
         if login_account(u, p):
+
             st.session_state.logged_in = True
             st.session_state.username = u
             st.session_state.page = "chat"
             st.rerun()
+
         else:
             st.error("Erreur login")
 
     st.stop()
 
 # ======================================================
-# 🧠 IA RESPONSE FIXÉE
+# 🧠 IA RESPONSE LOGIC (CORRIGÉE)
 # ======================================================
 def generer_reponse(prompt):
 
+    prompt = prompt.lower().strip()
+
     if st.session_state.humeur == "Raisonnement complexe":
 
-        return f"""🧠 Analyse complète :
+        return f"""
+🧠 Analyse de la question :
 
-- Question : {prompt}
-- Analyse logique
-- Décomposition étape par étape
-- Conclusion structurée
+• Question : {prompt}
+• Compréhension du sujet
+• Analyse logique étape par étape
+• Construction de la réponse
 
 👉 Réponse :
-Je vais traiter ça de façon approfondie."""
+Je traite ta demande : "{prompt}"
+
+➡️ Explication claire et structurée.
+Si tu veux plus de précision, reformule 👍
+"""
 
     elif st.session_state.humeur == "Drôle":
-        return f"😄 Haha ! {prompt}"
+        return f"😄 Tu viens de dire : '{prompt}'… j’avoue c’est stylé 😂"
 
     elif st.session_state.humeur == "Sérieux":
-        return f"📌 Réponse structurée : {prompt}"
+        return f"📌 Analyse sérieuse :\n\nTu as demandé : {prompt}\n\n➡️ Je vais t’aider de manière claire et structurée."
 
     elif st.session_state.humeur == "Sarcastique":
-        return f"😏 Vraiment ? {prompt}"
+        return f"🙃 Wow… '{prompt}'… quelle question incroyable franchement."
 
     else:
-        return f"{st.session_state.nom_ia} : {prompt}"
+        return f"🤖 {st.session_state.nom_ia} : J’ai bien reçu → '{prompt}' 👍"
 
 # ======================================================
-# 💬 CHAT (CORRIGÉ + STABLE)
+# 💬 CHAT
 # ======================================================
 if st.session_state.page == "chat" and st.session_state.logged_in:
 
@@ -173,7 +182,6 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     st.sidebar.success(f"👤 {st.session_state.username}")
 
-    # 🎭 IA SETTINGS
     st.sidebar.subheader("🎭 IA Settings")
 
     st.session_state.humeur = st.sidebar.selectbox(
@@ -181,9 +189,6 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"]
     )
 
-    st.sidebar.write(f"Mode : {st.session_state.humeur}")
-
-    # 💬 AFFICHAGE MESSAGES
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
@@ -192,13 +197,11 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     if prompt:
 
-        # USER
         st.session_state.messages.append({
             "role": "user",
             "content": prompt
         })
 
-        # IA
         reponse = generer_reponse(prompt)
 
         st.session_state.messages.append({
@@ -215,7 +218,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN DASHBOARD (FIX STABLE)
+# 🔐 ADMIN
 # ======================================================
 if st.session_state.page == "admin":
 
@@ -234,28 +237,19 @@ if st.session_state.page == "admin":
         ["📁 Sauvegardes", "👤 Comptes", "💬 Conversations"]
     )
 
-    # 📁 COMPTES
     if menu == "📁 Sauvegardes":
-
-        st.subheader("📁 Comptes")
 
         for f in os.listdir("accounts"):
             with st.expander(f):
                 with open(f"accounts/{f}", "r") as file:
                     st.text(file.read())
 
-    # 👤 USERS
     elif menu == "👤 Comptes":
-
-        st.subheader("👤 Utilisateurs")
 
         for f in os.listdir("accounts"):
             st.write("✔", f.replace(".txt", ""))
 
-    # 💬 CONVERSATIONS
     elif menu == "💬 Conversations":
-
-        st.subheader("💬 Conversations")
 
         for d in os.listdir("data"):
 
@@ -266,12 +260,9 @@ if st.session_state.page == "admin":
                 user = f.replace(".txt", "")
 
                 if st.button(f"👤 {user}"):
-
                     st.session_state.selected_user = f
 
                 if st.session_state.selected_user == f:
-
-                    st.markdown("### 📜 Conversation")
 
                     with open(f"data/{d}/{f}", "r") as file:
                         st.text(file.read())
