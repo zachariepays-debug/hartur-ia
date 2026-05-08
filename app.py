@@ -17,7 +17,7 @@ if "page" not in st.session_state: st.session_state.page = "home"
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
 if "username" not in st.session_state: st.session_state.username = None
 if "messages" not in st.session_state: st.session_state.messages = []
-if "humeur" not in st.session_state: st.session_state.humeur = "Cool"
+if "humeur" not in st.session_state: st.session_state.humeur = "Équilibrée"
 
 # ======================================================
 # 📁 GESTION DES DOSSIERS
@@ -57,13 +57,11 @@ def sauvegarder_message(user, texte, reponse):
     date_jour = datetime.now().strftime("%d-%m-%Y")
     pseudo = user.upper()
     
-    # 1. ADMIN (Fichier unique par jour pour tout voir d'un coup)
     chemin_date = f"data/{date_jour}"
     os.makedirs(chemin_date, exist_ok=True)
     with open(f"{chemin_date}/global_logs.txt", "a", encoding="utf-8") as f:
         f.write(f"###\n[{horaire}] {pseudo} : {texte}\n[{horaire}] IA  : {reponse}\n")
     
-    # 2. PERSO (Historique global pour l'utilisateur)
     chemin_perso = f"user_data/{user.lower()}"
     os.makedirs(chemin_perso, exist_ok=True)
     with open(f"{chemin_perso}/history.txt", "a", encoding="utf-8") as f:
@@ -89,18 +87,27 @@ def afficher_texte_admin_inverse(texte):
         st.markdown("<hr style='margin:10px 0; border:0.5px solid #333'>", unsafe_allow_html=True)
 
 # ======================================================
-# 🧠 IA LOGIQUE
+# 🧠 IA LOGIQUE (PERSONNALITÉ AJUSTÉE)
 # ======================================================
 def generer_reponse(prompt):
     if not api_key: return "Clé manquante."
-    instructions = {"Cool": "Tu es Hartur, ado cool.", "Drôle": "Sois drôle.", "Sérieux": "Bref.", "Sarcastique": "Ironique.", "Raisonnement complexe": "Fluide."}
+    
+    # Ajustement du ton : "Équilibrée" remplace "Cool" pour un ton un peu plus sérieux
+    instructions = {
+        "Équilibrée": "Tu es Hartur. Ton ton est poli, posé et un peu plus sérieux, tout en restant moderne. Évite le langage trop familier mais reste accessible.", 
+        "Drôle": "Sois amusant et plein d'esprit.", 
+        "Sérieux": "Sois très formel, précis et synthétique.", 
+        "Sarcastique": "Utilise l'ironie avec finesse.", 
+        "Raisonnement complexe": "Fournis une analyse structurée et détaillée."
+    }
+    
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     data = {"model": "open-mistral-7b", "messages": [{"role": "system", "content": instructions.get(st.session_state.humeur, "Tu es Hartur.")}, {"role": "user", "content": prompt}], "temperature": 0.7}
     try:
         response = requests.post(url, headers=headers, json=data, timeout=12)
         return response.json()['choices'][0]['message']['content']
-    except: return "Bug réseau..."
+    except: return "Erreur de connexion..."
 
 # ======================================================
 # 🏠 NAVIGATION ET PAGES
@@ -122,7 +129,7 @@ elif st.session_state.page == "signup":
     p = st.text_input("Pass", type="password")
     if st.button("Créer"):
         if create_account(u, p): st.session_state.page = "login"; st.rerun()
-        else: st.error("Déjà pris.")
+        else: st.error("Pseudo déjà utilisé.")
 
 elif st.session_state.page == "login":
     u = st.text_input("Pseudo")
@@ -132,15 +139,15 @@ elif st.session_state.page == "login":
             st.session_state.logged_in, st.session_state.username = True, u
             st.session_state.messages = charger_historique_utilisateur(u)
             st.session_state.page = "chat"; st.rerun()
-        else: st.error("Erreur.")
+        else: st.error("Erreur d'accès.")
 
 elif st.session_state.page == "chat":
     st.title(f"🤖 Discussion")
-    st.sidebar.write(f"Compte : **{st.session_state.username}**")
-    st.session_state.humeur = st.sidebar.selectbox("Humeur", ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"])
+    st.sidebar.write(f"Utilisateur : **{st.session_state.username}**")
+    st.session_state.humeur = st.sidebar.selectbox("Personnalité", ["Équilibrée", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"])
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
-    prompt = st.chat_input("Écris ici...")
+    prompt = st.chat_input("Votre message...")
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
@@ -153,7 +160,7 @@ elif st.session_state.page == "chat":
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN (TRIÉ PAR DATE - TOUT ENSEMBLE)
+# 🔐 ADMIN
 # ======================================================
 elif st.session_state.page == "admin":
     st.title("🔐 Panneau Admin")
@@ -167,8 +174,8 @@ elif st.session_state.page == "admin":
                         st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
 
         with t2:
-            st.subheader("Flux d'activité récent")
-            if st.button("🗑️ Vider l'historique"):
+            st.subheader("Flux d'activité par jour")
+            if st.button("🗑️ Vider tout l'historique"):
                 for folder in ["data", "user_data"]:
                     if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder)
                 st.rerun()
@@ -180,19 +187,17 @@ elif st.session_state.page == "admin":
                         if os.path.exists(path_log):
                             with open(path_log, "r", encoding="utf-8") as f:
                                 afficher_texte_admin_inverse(f.read())
-                        else:
-                            st.write("Aucun message aujourd'hui.")
         
         with t3:
             if os.path.exists("user_data"):
                 utilisateurs = sorted([u for u in os.listdir("user_data") if os.path.isdir(f"user_data/{u}")])
                 if utilisateurs:
-                    u_select = st.selectbox("Choisir l'utilisateur", utilisateurs)
+                    u_select = st.selectbox("Sélectionner l'utilisateur", utilisateurs)
                     hist_path = f"user_data/{u_select}/history.txt"
                     if os.path.exists(hist_path):
                         with open(hist_path, "r", encoding="utf-8") as f:
                             data_all = f.read()
-                        st.download_button(label=f"💾 Télécharger {u_select.upper()}", data=data_all, file_name=f"archive_{u_select}.txt")
+                        st.download_button(label=f"💾 Exporter l'historique de {u_select.upper()}", data=data_all, file_name=f"archive_{u_select}.txt")
                         st.divider()
                         afficher_texte_admin_inverse(data_all)
     if st.button("⬅ Retour"): st.session_state.page = "home"; st.rerun()
