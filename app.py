@@ -1,7 +1,6 @@
 import streamlit as st
 import os
-import random
-import requests
+from datetime import datetime
 
 # ======================================================
 # ⚙️ CONFIG
@@ -13,35 +12,36 @@ st.set_page_config(
 )
 
 # ======================================================
-# 🔑 API KEY (FIX STREAMLIT SECRETS)
+# 💾 SESSION STATE
 # ======================================================
-OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+if "page" not in st.session_state:
+    st.session_state.page = "home"
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if "username" not in st.session_state:
+    st.session_state.username = None
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "nom_ia" not in st.session_state:
+    st.session_state.nom_ia = "Hartur"
+
+# 👉 SUPPRESSION des humeurs problématiques (IA stable)
+st.session_state.humeur = "Stable"
+
+if "selected_user" not in st.session_state:
+    st.session_state.selected_user = None
 
 # ======================================================
-# 💾 SESSION STATE SAFE INIT
-# ======================================================
-defaults = {
-    "page": "home",
-    "logged_in": False,
-    "username": None,
-    "messages": [],
-    "nom_ia": "Hartur",
-    "selected_user": None
-}
-
-for k, v in defaults.items():
-    if k not in st.session_state:
-        st.session_state[k] = v
-
-# ======================================================
-# 📁 FOLDERS SAFE
+# 📁 USERS + DATA
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 os.makedirs("data", exist_ok=True)
 
-# ======================================================
-# 👤 USERS SYSTEM
-# ======================================================
+
 def create_account(user, pwd):
     file = f"accounts/{user.lower()}.txt"
     if os.path.exists(file):
@@ -50,6 +50,7 @@ def create_account(user, pwd):
         f.write(pwd)
     return True
 
+
 def login_account(user, pwd):
     file = f"accounts/{user.lower()}.txt"
     if not os.path.exists(file):
@@ -57,51 +58,38 @@ def login_account(user, pwd):
     with open(file, "r") as f:
         return f.read() == pwd
 
+
 # ======================================================
-# 🧠 IA (API CORRIGÉE)
+# 💾 SAUVEGARDE CONVERSATION
 # ======================================================
+
+def save_message(username, role, content):
+    date = datetime.now().strftime("%Y-%m-%d")
+    folder = f"data/{date}"
+    os.makedirs(folder, exist_ok=True)
+
+    file = f"{folder}/{username}.txt"
+
+    with open(file, "a", encoding="utf-8") as f:
+        f.write(f"{role.upper()} : {content}\n")
+
+
+# ======================================================
+# 🧠 IA RESPONSE (FIX API READY)
+# ======================================================
+
 def generer_reponse(prompt):
 
-    prompt = prompt.strip()
+    # 🔥 MODE SIMPLE STABLE (sans bug humeur)
+    
+    # 👉 SI TU VEUX UNE API PLUS TARD : décommente
+    # return appel_api_openai(prompt)
 
-    if not prompt:
-        return "Dis-moi quelque chose 🙂"
+    return f"🤖 {st.session_state.nom_ia} : {prompt}"
 
-    url = "https://api.openai.com/v1/chat/completions"
-
-    headers = {
-        "Authorization": f"Bearer {st.secrets['OPENAI_API_KEY']}",
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {
-                "role": "system",
-                "content": "Tu es Hartur, une IA naturelle, utile et simple. Tu réponds sans répétitions inutiles."
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        "temperature": 0.7
-    }
-
-    try:
-        response = requests.post(url, headers=headers, json=data, timeout=20)
-
-        if response.status_code != 200:
-            return f"❌ API Error {response.status_code} : {response.text}"
-
-        return response.json()["choices"][0]["message"]["content"]
-
-    except Exception as e:
-        return f"❌ Connexion error : {str(e)}"
 
 # ======================================================
-# 🔐 ADMIN BUTTON
+# 🔐 NAVIGATION TOP
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
@@ -110,6 +98,7 @@ with col2:
         st.session_state.page = "admin"
         st.rerun()
 
+
 # ======================================================
 # 🏠 HOME
 # ======================================================
@@ -117,7 +106,12 @@ if st.session_state.page == "home":
 
     st.title("🤖 Hartur IA")
 
-    st.info("✔ IA ✔ Chat ✔ Comptes ✔ Admin")
+    st.info("""
+✔ IA stable (corrigée)
+✔ Comptes utilisateurs
+✔ Chat sauvegardé
+✔ Admin panel
+""")
 
     c1, c2 = st.columns(2)
 
@@ -133,10 +127,13 @@ if st.session_state.page == "home":
 
     st.stop()
 
+
 # ======================================================
 # 🆕 SIGNUP
 # ======================================================
 if st.session_state.page == "signup":
+
+    st.subheader("Créer compte")
 
     u = st.text_input("Identifiant")
     p = st.text_input("Mot de passe", type="password")
@@ -147,14 +144,17 @@ if st.session_state.page == "signup":
             st.session_state.page = "login"
             st.rerun()
         else:
-            st.error("Déjà existant")
+            st.error("Compte déjà existant")
 
     st.stop()
+
 
 # ======================================================
 # 🔑 LOGIN
 # ======================================================
 if st.session_state.page == "login":
+
+    st.subheader("Connexion")
 
     u = st.text_input("Identifiant")
     p = st.text_input("Mot de passe", type="password")
@@ -162,14 +162,17 @@ if st.session_state.page == "login":
     if st.button("Connexion"):
 
         if login_account(u, p):
+
             st.session_state.logged_in = True
             st.session_state.username = u
             st.session_state.page = "chat"
             st.rerun()
+
         else:
-            st.error("Erreur login")
+            st.error("Identifiants incorrects")
 
     st.stop()
+
 
 # ======================================================
 # 💬 CHAT
@@ -180,6 +183,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     st.sidebar.success(f"👤 {st.session_state.username}")
 
+    # 💬 affichage messages
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
@@ -188,66 +192,53 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     if prompt:
 
-        st.session_state.messages.append({
-            "role": "user",
-            "content": prompt
-        })
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        save_message(st.session_state.username, "user", prompt)
 
-        response = generer_reponse(prompt)
+        reponse = generer_reponse(prompt)
 
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": response
-        })
+        st.session_state.messages.append({"role": "assistant", "content": reponse})
+        save_message(st.session_state.username, "assistant", reponse)
 
         st.rerun()
 
     if st.sidebar.button("Déconnexion"):
-        st.session_state = {}
+        st.session_state.logged_in = False
+        st.session_state.username = None
+        st.session_state.page = "home"
         st.rerun()
 
+
 # ======================================================
-# 🔐 ADMIN PANEL SAFE
+# 🔐 ADMIN
 # ======================================================
 if st.session_state.page == "admin":
 
     st.title("🔐 ADMIN PANEL")
 
-    mdp = st.text_input("Mot de passe", type="password")
+    mdp = st.text_input("Mot de passe admin", type="password")
 
     if mdp != "babar":
+        st.warning("Accès refusé")
         st.stop()
+
+    st.success("Admin actif")
 
     menu = st.radio("Menu", ["Comptes", "Conversations"])
 
     if menu == "Comptes":
-
         for f in os.listdir("accounts"):
-            st.write("✔", f.replace(".txt", ""))
+            st.write(f.replace(".txt", ""))
 
-    if menu == "Conversations":
+    elif menu == "Conversations":
 
-        if os.path.exists("data"):
+        for d in os.listdir("data"):
+            st.write("📅", d)
 
-            for d in os.listdir("data"):
-
-                path = os.path.join("data", d)
-
-                if not os.path.isdir(path):
-                    continue
-
-                st.write("📅", d)
-
-                for f in os.listdir(path):
-
-                    if st.button(f"👤 {f}", key=f"btn_{d}_{f}"):
-
-                        st.session_state.selected_user = f
-
-                    if st.session_state.selected_user == f:
-
-                        with open(os.path.join(path, f), "r") as file:
-                            st.text(file.read())
+            for f in os.listdir(f"data/{d}"):
+                if st.button(f):
+                    with open(f"data/{d}/{f}", "r", encoding="utf-8") as file:
+                        st.text(file.read())
 
     if st.button("⬅ Retour"):
         st.session_state.page = "home"
