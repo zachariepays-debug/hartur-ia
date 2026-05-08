@@ -20,10 +20,11 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "humeur" not in st.session_state: st.session_state.humeur = "Cool"
 
 # ======================================================
-# 📁 GESTION DES FICHIERS ET HISTORIQUE
+# 📁 GESTION DES DOSSIERS
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
-os.makedirs("data", exist_ok=True)
+os.makedirs("data", exist_ok=True)      # Pour l'admin (par date)
+os.makedirs("user_data", exist_ok=True) # Pour l'utilisateur (historique permanent)
 
 def create_account(user, pwd):
     file = f"accounts/{user.lower()}.txt"
@@ -37,60 +38,47 @@ def login_account(user, pwd):
     with open(file, "r", encoding="utf-8") as f: return f.read().strip() == pwd
 
 def charger_historique_utilisateur(user):
-    """Charge les messages des jours précédents pour l'interface de chat"""
+    """Charge l'historique complet depuis le dossier personnel de l'utilisateur"""
+    chemin_perso = f"user_data/{user.lower()}/history.txt"
     historique = []
-    # On parcourt les dossiers de dates pour trouver les messages de l'utilisateur
-    if os.path.exists("data"):
-        for date_dir in sorted(os.listdir("data")):
-            chemin_conv = f"data/{date_dir}/{user.lower()}/conversation.txt"
-            if os.path.exists(chemin_conv):
-                with open(chemin_conv, "r", encoding="utf-8") as f:
-                    lignes = f.readlines()
-                    for ligne in lignes:
-                        if "LUI :" in ligne:
-                            contenu = ligne.split("LUI :")[1].strip()
-                            historique.append({"role": "user", "content": contenu})
-                        elif "IA  :" in ligne:
-                            contenu = ligne.split("IA  :")[1].strip()
-                            historique.append({"role": "assistant", "content": contenu})
+    if os.path.exists(chemin_perso):
+        with open(chemin_perso, "r", encoding="utf-8") as f:
+            for ligne in f:
+                if "LUI :" in ligne:
+                    historique.append({"role": "user", "content": ligne.split("LUI :")[1].strip()})
+                elif "IA  :" in ligne:
+                    historique.append({"role": "assistant", "content": ligne.split("IA  :")[1].strip()})
     return historique
 
-def sauvegarder_message_local(user, texte, reponse):
-    date_jour = datetime.now().strftime("%d-%m-%Y")
-    chemin_user = f"data/{date_jour}/{user.lower()}"
-    os.makedirs(chemin_user, exist_ok=True)
-    
-    chemin_fichier = f"{chemin_user}/conversation.txt"
+def sauvegarder_message(user, texte, reponse):
     horaire = datetime.now().strftime("%H:%M")
+    date_jour = datetime.now().strftime("%d-%m-%Y")
     
-    with open(chemin_fichier, "a", encoding="utf-8") as f:
-        f.write(f"[{horaire}] LUI : {texte}\n")
-        f.write(f"[{horaire}] IA  : {reponse}\n")
-        f.write("-" * 40 + "\n")
+    # 1. Sauvegarde pour l'ADMIN (par date)
+    chemin_admin = f"data/{date_jour}/{user.lower()}"
+    os.makedirs(chemin_admin, exist_ok=True)
+    with open(f"{chemin_admin}/conversation.txt", "a", encoding="utf-8") as f:
+        f.write(f"[{horaire}] LUI : {texte}\n[{horaire}] IA  : {reponse}\n" + "-"*30 + "\n")
+    
+    # 2. Sauvegarde pour l'UTILISATEUR (historique global)
+    chemin_perso = f"user_data/{user.lower()}"
+    os.makedirs(chemin_perso, exist_ok=True)
+    with open(f"{chemin_perso}/history.txt", "a", encoding="utf-8") as f:
+        f.write(f"LUI : {texte}\nIA  : {reponse}\n")
 
 # ======================================================
 # 🧠 IA LOGIQUE
 # ======================================================
 def generer_reponse(prompt):
-    if not api_key: return "Clé API manquante."
-    instructions = {
-        "Cool": "Tu es Hartur, un ado cool. Réponds directement, sans listes, tutoie.",
-        "Drôle": "Sois drôle, utilise des emojis.",
-        "Sérieux": "Réponds de manière concise.",
-        "Sarcastique": "Sois ironique.",
-        "Raisonnement complexe": "Réponds avec intelligence mais reste fluide."
-    }
+    if not api_key: return "Clé manquante."
+    instructions = {"Cool": "Tu es Hartur, un ado cool. Réponds direct, tutoie.", "Drôle": "Sois drôle.", "Sérieux": "Sois bref.", "Sarcastique": "Sois ironique.", "Raisonnement complexe": "Sois fluide."}
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
-    data = {
-        "model": "open-mistral-7b",
-        "messages": [{"role": "system", "content": instructions.get(st.session_state.humeur, "Tu es Hartur.")}, {"role": "user", "content": prompt}],
-        "temperature": 0.7
-    }
+    data = {"model": "open-mistral-7b", "messages": [{"role": "system", "content": instructions.get(st.session_state.humeur, "Tu es Hartur.")}, {"role": "user", "content": prompt}], "temperature": 0.7}
     try:
         response = requests.post(url, headers=headers, json=data, timeout=12)
         return response.json()['choices'][0]['message']['content']
-    except: return "Erreur réseau..."
+    except: return "Bug réseau..."
 
 # ======================================================
 # 🏠 NAVIGATION
@@ -119,19 +107,16 @@ elif st.session_state.page == "login":
     p = st.text_input("Pass", type="password")
     if st.button("Entrer"):
         if login_account(u, p):
-            st.session_state.logged_in = True
-            st.session_state.username = u
-            # CHARGEMENT DE L'HISTORIQUE ICI
+            st.session_state.logged_in, st.session_state.username = True, u
             st.session_state.messages = charger_historique_utilisateur(u)
             st.session_state.page = "chat"; st.rerun()
-        else: st.error("Erreur de login.")
+        else: st.error("Identifiants incorrects.")
 
 elif st.session_state.page == "chat":
     st.title(f"🤖 Chat")
-    st.sidebar.write(f"Utilisateur : **{st.session_state.username}**")
+    st.sidebar.write(f"Compte : **{st.session_state.username}**")
     st.session_state.humeur = st.sidebar.selectbox("Mood", ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"])
     
-    # Affichage de l'historique (anciens + nouveaux messages)
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
@@ -142,41 +127,43 @@ elif st.session_state.page == "chat":
         reponse = generer_reponse(prompt)
         st.session_state.messages.append({"role": "assistant", "content": reponse})
         with st.chat_message("assistant"): st.markdown(reponse)
-        sauvegarder_message_local(st.session_state.username, prompt, reponse)
+        sauvegarder_message(st.session_state.username, prompt, reponse)
 
     if st.sidebar.button("Déconnexion"):
-        st.session_state.logged_in = False
-        st.session_state.messages = []
-        st.session_state.page = "home"; st.rerun()
+        st.session_state.logged_in, st.session_state.messages, st.session_state.page = False, [], "home"
+        st.rerun()
 
 # ======================================================
-# 🔐 ADMIN
+# 🔐 ADMIN (Double Historique)
 # ======================================================
 elif st.session_state.page == "admin":
     st.title("🔐 Panneau Admin")
-    if st.text_input("Mot de passe", type="password") == "babar":
-        tab1, tab2 = st.tabs(["👤 Comptes", "💬 Conversations"])
-        with tab1:
+    if st.text_input("Mot de passe maître", type="password") == "babar":
+        t1, t2, t3 = st.tabs(["👤 Comptes", "📅 Par Date", "📂 Par Utilisateur"])
+        
+        with t1:
             for f in os.listdir("accounts"):
                 with open(f"accounts/{f}", "r") as file:
                     st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
-        with tab2:
+
+        with t2:
             if st.button("🗑️ Vider l'historique complet"):
-                if os.path.exists("data"):
-                    shutil.rmtree("data")
-                    os.makedirs("data")
-                    st.rerun()
-            st.divider()
+                for folder in ["data", "user_data"]:
+                    if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder)
+                st.rerun()
             dates = sorted([d for d in os.listdir("data") if os.path.isdir(f"data/{d}")], reverse=True)
             for d in dates:
                 with st.expander(f"📅 Date : {d}"):
-                    chemin_date = f"data/{d}"
-                    users = [u for u in os.listdir(chemin_date) if os.path.isdir(f"{chemin_date}/{u}")]
-                    for u in users:
-                        st.markdown(f"**📂 Dossier Utilisateur : {u.upper()}**")
-                        chemin_conv = f"{chemin_date}/{u}/conversation.txt"
-                        if os.path.exists(chemin_conv):
-                            with open(chemin_conv, "r", encoding="utf-8") as f:
-                                st.text(f.read())
-                        st.divider()
+                    for u in os.listdir(f"data/{d}"):
+                        st.write(f"**Utilisateur : {u.upper()}**")
+                        with open(f"data/{d}/{u}/conversation.txt", "r", encoding="utf-8") as f: st.text(f.read())
+        
+        with t3:
+            st.subheader("Historique complet par personne")
+            users = [u for u in os.listdir("user_data") if os.path.isdir(f"user_data/{u}")]
+            for u in users:
+                with st.expander(f"👤 Historique de {u.upper()}"):
+                    with open(f"user_data/{u}/history.txt", "r", encoding="utf-8") as f:
+                        st.text(f.read())
+
     if st.button("⬅ Retour"): st.session_state.page = "home"; st.rerun()
