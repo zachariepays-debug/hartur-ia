@@ -57,13 +57,13 @@ def sauvegarder_message(user, texte, reponse):
     date_jour = datetime.now().strftime("%d-%m-%Y")
     pseudo = user.upper()
     
-    # 1. ADMIN (Par Date)
-    chemin_admin = f"data/{date_jour}/{user.lower()}"
-    os.makedirs(chemin_admin, exist_ok=True)
-    with open(f"{chemin_admin}/conversation.txt", "a", encoding="utf-8") as f:
+    # 1. ADMIN (Fichier unique par jour pour tout voir d'un coup)
+    chemin_date = f"data/{date_jour}"
+    os.makedirs(chemin_date, exist_ok=True)
+    with open(f"{chemin_date}/global_logs.txt", "a", encoding="utf-8") as f:
         f.write(f"###\n[{horaire}] {pseudo} : {texte}\n[{horaire}] IA  : {reponse}\n")
     
-    # 2. PERSO (Historique global)
+    # 2. PERSO (Historique global pour l'utilisateur)
     chemin_perso = f"user_data/{user.lower()}"
     os.makedirs(chemin_perso, exist_ok=True)
     with open(f"{chemin_perso}/history.txt", "a", encoding="utf-8") as f:
@@ -153,7 +153,7 @@ elif st.session_state.page == "chat":
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN
+# 🔐 ADMIN (TRIÉ PAR DATE - TOUT ENSEMBLE)
 # ======================================================
 elif st.session_state.page == "admin":
     st.title("🔐 Panneau Admin")
@@ -167,6 +167,7 @@ elif st.session_state.page == "admin":
                         st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
 
         with t2:
+            st.subheader("Flux d'activité récent")
             if st.button("🗑️ Vider l'historique"):
                 for folder in ["data", "user_data"]:
                     if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder)
@@ -174,13 +175,13 @@ elif st.session_state.page == "admin":
             if os.path.exists("data"):
                 dates = sorted([d for d in os.listdir("data") if os.path.isdir(f"data/{d}")], reverse=True)
                 for d in dates:
-                    with st.expander(f"📅 Date : {d}"):
-                        for u in os.listdir(f"data/{d}"):
-                            st.subheader(f"Archive de {u.upper()}")
-                            path = f"data/{d}/{u}/conversation.txt"
-                            if os.path.exists(path):
-                                with open(path, "r", encoding="utf-8") as f:
-                                    afficher_texte_admin_inverse(f.read())
+                    with st.expander(f"📅 Journée du : {d}"):
+                        path_log = f"data/{d}/global_logs.txt"
+                        if os.path.exists(path_log):
+                            with open(path_log, "r", encoding="utf-8") as f:
+                                afficher_texte_admin_inverse(f.read())
+                        else:
+                            st.write("Aucun message aujourd'hui.")
         
         with t3:
             if os.path.exists("user_data"):
