@@ -81,6 +81,19 @@ def generer_reponse(prompt):
     except: return "Bug réseau..."
 
 # ======================================================
+# 🎨 FONCTION D'AFFICHAGE COULEUR (ADMIN)
+# ======================================================
+def afficher_texte_colore(texte):
+    lignes = texte.split("\n")
+    for ligne in lignes:
+        if "LUI :" in ligne:
+            st.markdown(f"<span style='color:#3498db'><b>{ligne}</b></span>", unsafe_allow_html=True)
+        elif "IA  :" in ligne:
+            st.markdown(f"<span style='color:#e67e22'>{ligne}</span>", unsafe_allow_html=True)
+        else:
+            st.write(ligne)
+
+# ======================================================
 # 🏠 NAVIGATION
 # ======================================================
 col1, col2 = st.columns([9, 1])
@@ -134,7 +147,7 @@ elif st.session_state.page == "chat":
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN (AVEC TÉLÉCHARGEMENT SÉLECTIF)
+# 🔐 ADMIN (AVEC COULEURS)
 # ======================================================
 elif st.session_state.page == "admin":
     st.title("🔐 Panneau Admin")
@@ -147,7 +160,7 @@ elif st.session_state.page == "admin":
                     st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
 
         with t2:
-            if st.button("🗑️ Vider l'historique complet"):
+            if st.button("🗑️ Vider l'historique"):
                 for folder in ["data", "user_data"]:
                     if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder)
                 st.rerun()
@@ -157,35 +170,29 @@ elif st.session_state.page == "admin":
                     with st.expander(f"📅 Date : {d}"):
                         for u in os.listdir(f"data/{d}"):
                             st.write(f"**Utilisateur : {u.upper()}**")
-                            with open(f"data/{d}/{u}/conversation.txt", "r", encoding="utf-8") as f: st.text(f.read())
+                            conv_path = f"data/{d}/{u}/conversation.txt"
+                            if os.path.exists(conv_path):
+                                with open(conv_path, "r", encoding="utf-8") as f:
+                                    afficher_texte_colore(f.read())
                             st.divider()
         
         with t3:
-            st.subheader("📥 Exporter un historique")
+            st.subheader("📥 Exportation & Lecture")
             if os.path.exists("user_data"):
                 utilisateurs = sorted([u for u in os.listdir("user_data") if os.path.isdir(f"user_data/{u}")])
-                
                 if utilisateurs:
-                    # Choix de l'utilisateur à télécharger
-                    u_select = st.selectbox("Choisir l'utilisateur à télécharger", utilisateurs)
+                    u_select = st.selectbox("Choisir l'utilisateur", utilisateurs)
                     hist_path = f"user_data/{u_select}/history.txt"
                     
                     if os.path.exists(hist_path):
                         with open(hist_path, "r", encoding="utf-8") as f:
-                            data_to_download = f.read()
+                            data_all = f.read()
                         
-                        st.download_button(
-                            label=f"💾 Télécharger les conversations de {u_select.upper()}",
-                            data=data_to_download,
-                            file_name=f"archive_{u_select}_{datetime.now().strftime('%d-%m-%Y')}.txt",
-                            mime="text/plain"
-                        )
+                        st.download_button(label=f"💾 Télécharger {u_select.upper()}", data=data_all, file_name=f"archive_{u_select}.txt")
                         st.divider()
-                        
-                        # Affichage rapide en dessous pour vérification
-                        st.write("**Aperçu :**")
-                        st.text(data_to_download[:500] + "...") # Affiche les 500 premiers caractères
+                        st.write("**Historique complet :**")
+                        afficher_texte_colore(data_all)
                 else:
-                    st.info("Aucun historique disponible pour le moment.")
+                    st.info("Aucun historique.")
 
     if st.button("⬅ Retour"): st.session_state.page = "home"; st.rerun()
