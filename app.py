@@ -28,9 +28,6 @@ if "messages" not in st.session_state:
 if "nom_ia" not in st.session_state:
     st.session_state.nom_ia = "Hartur"
 
-if "humeur" not in st.session_state:
-    st.session_state.humeur = "Cool"
-
 if "selected_user" not in st.session_state:
     st.session_state.selected_user = None
 
@@ -138,7 +135,7 @@ if st.session_state.page == "login":
     st.stop()
 
 # ======================================================
-# 🧠 IA RESPONSE LOGIC (CORRIGÉ)
+# 🧠 IA RESPONSE LOGIC (CORRIGÉ SANS HUMEUR)
 # ======================================================
 def generer_reponse(prompt):
 
@@ -147,35 +144,19 @@ def generer_reponse(prompt):
     if not prompt:
         return "🤖 Dis-moi quelque chose 🙂"
 
-    if st.session_state.humeur == "Raisonnement complexe":
+    return f"""🤖 {st.session_state.nom_ia} :
 
-        return f"""
-🧠 Analyse :
+📌 Tu as dit : {prompt}
 
-📌 Question : {prompt}
+🧠 Réponse :
+Je comprends ta demande et je vais y répondre clairement sans répéter ta question inutilement.
 
-🔎 Étape 1 : compréhension  
-🔎 Étape 2 : logique  
-🔎 Étape 3 : réflexion  
-
-👉 Réponse :
-Je ne répète pas ta question, je la transforme en analyse.
+👉 Analyse :
+Je transforme ton message en réponse utile et structurée.
 
 💡 Conclusion :
-Je traite ton message comme un problème à résoudre.
+Ta demande est prise en compte et traitée correctement.
 """
-
-    elif st.session_state.humeur == "Drôle":
-        return f"😄 Haha ok ! Mais imagine si je faisais juste ça : '{prompt}' 😂"
-
-    elif st.session_state.humeur == "Sérieux":
-        return f"📌 Analyse : {prompt}\n\n👉 Réponse structurée et claire."
-
-    elif st.session_state.humeur == "Sarcastique":
-        return f"🙃 Wow… question incroyable : {prompt}"
-
-    else:
-        return f"🤖 {st.session_state.nom_ia} réfléchit à ta demande..."
 
 # ======================================================
 # 💬 CHAT
@@ -185,13 +166,6 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
     st.title(f"🤖 {st.session_state.nom_ia}")
 
     st.sidebar.success(f"👤 {st.session_state.username}")
-
-    st.sidebar.subheader("🎭 IA Settings")
-
-    st.session_state.humeur = st.sidebar.selectbox(
-        "Humeur IA",
-        ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"]
-    )
 
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
