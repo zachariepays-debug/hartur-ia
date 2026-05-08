@@ -1,7 +1,7 @@
 import streamlit as st
 import os
-import requests
 import random
+import requests
 
 # ======================================================
 # ⚙️ CONFIG
@@ -13,12 +13,12 @@ st.set_page_config(
 )
 
 # ======================================================
-# 🔑 API KEY (IMPORTANT)
+# 🔑 API KEY (FIX STREAMLIT SECRETS)
 # ======================================================
-OPENAI_API_KEY = "TA_CLE_API_ICI"
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
 # ======================================================
-# 💾 SESSION STATE SAFE
+# 💾 SESSION STATE SAFE INIT
 # ======================================================
 defaults = {
     "page": "home",
@@ -34,13 +34,13 @@ for k, v in defaults.items():
         st.session_state[k] = v
 
 # ======================================================
-# 📁 SAFE FOLDERS
+# 📁 FOLDERS SAFE
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 os.makedirs("data", exist_ok=True)
 
 # ======================================================
-# 🔐 USERS SYSTEM
+# 👤 USERS SYSTEM
 # ======================================================
 def create_account(user, pwd):
     file = f"accounts/{user.lower()}.txt"
@@ -58,7 +58,7 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🧠 IA (API PROPRE + SAFE)
+# 🧠 IA (API CORRIGÉE)
 # ======================================================
 def generer_reponse(prompt):
 
@@ -70,7 +70,7 @@ def generer_reponse(prompt):
     url = "https://api.openai.com/v1/chat/completions"
 
     headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Authorization": f"Bearer {st.secrets['OPENAI_API_KEY']}",
         "Content-Type": "application/json"
     }
 
@@ -79,22 +79,26 @@ def generer_reponse(prompt):
         "messages": [
             {
                 "role": "system",
-                "content": "Tu es Hartur, une IA utile, naturelle, sans répétition, sans phrases robots."
+                "content": "Tu es Hartur, une IA naturelle, utile et simple. Tu réponds sans répétitions inutiles."
             },
             {
                 "role": "user",
                 "content": prompt
             }
         ],
-        "temperature": 0.8
+        "temperature": 0.7
     }
 
     try:
-        r = requests.post(url, headers=headers, json=data, timeout=20)
-        return r.json()["choices"][0]["message"]["content"]
+        response = requests.post(url, headers=headers, json=data, timeout=20)
 
-    except Exception:
-        return "Erreur IA (API ou connexion)"
+        if response.status_code != 200:
+            return f"❌ API Error {response.status_code} : {response.text}"
+
+        return response.json()["choices"][0]["message"]["content"]
+
+    except Exception as e:
+        return f"❌ Connexion error : {str(e)}"
 
 # ======================================================
 # 🔐 ADMIN BUTTON
@@ -143,7 +147,7 @@ if st.session_state.page == "signup":
             st.session_state.page = "login"
             st.rerun()
         else:
-            st.error("Compte déjà existant")
+            st.error("Déjà existant")
 
     st.stop()
 
@@ -203,7 +207,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN PANEL CLEAN
+# 🔐 ADMIN PANEL SAFE
 # ======================================================
 if st.session_state.page == "admin":
 
@@ -236,9 +240,8 @@ if st.session_state.page == "admin":
 
                 for f in os.listdir(path):
 
-                    key = f"btn_{d}_{f}"
+                    if st.button(f"👤 {f}", key=f"btn_{d}_{f}"):
 
-                    if st.button(f"👤 {f}", key=key):
                         st.session_state.selected_user = f
 
                     if st.session_state.selected_user == f:
