@@ -28,11 +28,14 @@ if "messages" not in st.session_state:
 if "nom_ia" not in st.session_state:
     st.session_state.nom_ia = "Hartur"
 
-if "admin_ok" not in st.session_state:
-    st.session_state.admin_ok = False
+if "humeur" not in st.session_state:
+    st.session_state.humeur = "Cool"
+
+if "selected_user" not in st.session_state:
+    st.session_state.selected_user = None
 
 # ======================================================
-# 📁 USERS
+# 📁 USERS + DATA
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 os.makedirs("data", exist_ok=True)
@@ -53,7 +56,7 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🔐 ADMIN BOUTON GLOBAL
+# 🔐 ADMIN BOUTON
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
@@ -101,17 +104,12 @@ if st.session_state.page == "signup":
     p = st.text_input("Mot de passe", type="password")
 
     if st.button("Créer"):
-
         if create_account(u, p):
             st.success("Compte créé")
             st.session_state.page = "login"
             st.rerun()
         else:
             st.error("Déjà utilisé")
-
-    if st.button("Retour"):
-        st.session_state.page = "home"
-        st.rerun()
 
     st.stop()
 
@@ -137,11 +135,35 @@ if st.session_state.page == "login":
         else:
             st.error("Erreur login")
 
-    if st.button("Retour"):
-        st.session_state.page = "home"
-        st.rerun()
-
     st.stop()
+
+# ======================================================
+# 🧠 IA RESPONSE LOGIC
+# ======================================================
+def generer_reponse(prompt):
+
+    if st.session_state.humeur == "Raisonnement complexe":
+
+        return f"""
+🧠 Analyse :
+
+1. Question : {prompt}
+2. Compréhension logique
+3. Analyse étape par étape
+4. Conclusion structurée
+
+👉 Réponse :
+Je vais traiter cela de façon approfondie et structurée.
+"""
+
+    elif st.session_state.humeur == "Drôle":
+        return f"😄 Haha ! {prompt}"
+
+    elif st.session_state.humeur == "Sérieux":
+        return f"Réponse structurée : {prompt}"
+
+    else:
+        return f"{st.session_state.nom_ia} : {prompt}"
 
 # ======================================================
 # 💬 CHAT
@@ -152,11 +174,17 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     st.sidebar.success(f"👤 {st.session_state.username}")
 
-    st.sidebar.write(f"IA : {st.session_state.nom_ia}")
+    # 🎭 IA SETTINGS
+    st.sidebar.subheader("🎭 IA Settings")
 
-    # ==================================================
-    # 💬 MESSAGES
-    # ==================================================
+    st.session_state.humeur = st.sidebar.selectbox(
+        "Humeur IA",
+        ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"]
+    )
+
+    st.sidebar.write(f"Mode : {st.session_state.humeur}")
+
+    # 💬 CHAT
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
@@ -170,7 +198,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
             "content": prompt
         })
 
-        reponse = f"{st.session_state.nom_ia} répond 🤖"
+        reponse = generer_reponse(prompt)
 
         st.session_state.messages.append({
             "role": "assistant",
@@ -186,11 +214,11 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN DASHBOARD COMPLET
+# 🔐 ADMIN DASHBOARD + CONVERSATIONS CLIQUABLES
 # ======================================================
 if st.session_state.page == "admin":
 
-    st.title("🔐 ADMIN DASHBOARD")
+    st.title("🔐 ADMIN PANEL")
 
     mdp = st.text_input("Mot de passe admin", type="password")
 
@@ -200,29 +228,22 @@ if st.session_state.page == "admin":
 
     st.success("Mode admin activé 🔓")
 
-    # ==================================================
-    # 📂 MENU ADMIN
-    # ==================================================
     menu = st.radio(
-        "Navigation",
-        ["📁 Sauvegardes", "👤 Comptes", "💬 Conversations", "⚙️ Options"]
+        "Navigation Admin",
+        ["📁 Sauvegardes", "👤 Comptes", "💬 Conversations"]
     )
 
-    # ==================================================
-    # 📁 SAUVEGARDES
-    # ==================================================
+    # 📁 COMPTES
     if menu == "📁 Sauvegardes":
 
-        st.subheader("📁 Fichiers comptes")
+        st.subheader("📁 Comptes")
 
         for f in os.listdir("accounts"):
             with st.expander(f):
                 with open(f"accounts/{f}", "r") as file:
                     st.text(file.read())
 
-    # ==================================================
-    # 👤 COMPTES
-    # ==================================================
+    # 👤 USERS
     elif menu == "👤 Comptes":
 
         st.subheader("👤 Utilisateurs")
@@ -230,34 +251,30 @@ if st.session_state.page == "admin":
         for f in os.listdir("accounts"):
             st.write("✔", f.replace(".txt", ""))
 
-    # ==================================================
-    # 💬 CONVERSATIONS
-    # ==================================================
+    # 💬 CONVERSATIONS CLIQUABLES
     elif menu == "💬 Conversations":
 
-        st.subheader("💬 Chats enregistrés")
+        st.subheader("💬 Conversations")
 
         for d in os.listdir("data"):
+
             st.write("📅", d)
 
             for f in os.listdir(f"data/{d}"):
-                st.write("👤", f)
 
-    # ==================================================
-    # ⚙️ OPTIONS
-    # ==================================================
-    elif menu == "⚙️ Options":
+                user = f.replace(".txt", "")
 
-        st.subheader("⚙️ Configuration IA")
+                if st.button(f"👤 {user}"):
 
-        st.write("✔ Nom IA verrouillé")
-        st.write("✔ Système chat actif")
+                    st.session_state.selected_user = f
 
-    # ==================================================
-    # RETOUR
-    # ==================================================
-    if st.button("⬅ Retour application"):
+                if st.session_state.selected_user == f:
+
+                    st.markdown("### 📜 Conversation")
+
+                    with open(f"data/{d}/{f}", "r") as file:
+                        st.text(file.read())
+
+    if st.button("⬅ Retour app"):
         st.session_state.page = "home"
         st.rerun()
-
-    st.stop()
