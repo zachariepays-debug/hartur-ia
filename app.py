@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import time
 
 # ======================================================
 # ⚙️ CONFIG
@@ -25,21 +26,57 @@ if "username" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "current_chat" not in st.session_state:
+    st.session_state.current_chat = None
+
 if "nom_ia" not in st.session_state:
     st.session_state.nom_ia = "Hartur"
 
 if "humeur" not in st.session_state:
     st.session_state.humeur = "Cool"
 
-if "selected_user" not in st.session_state:
-    st.session_state.selected_user = None
-
 # ======================================================
-# 📁 USERS + DATA
+# 📁 FILE SYSTEM
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 os.makedirs("data", exist_ok=True)
 
+def user_folder(user):
+    path = f"data/{user}"
+    os.makedirs(path, exist_ok=True)
+    return path
+
+def chat_file(user, chat_id):
+    return f"{user_folder(user)}/{chat_id}.txt"
+
+def list_chats(user):
+    folder = user_folder(user)
+    return [f.replace(".txt", "") for f in os.listdir(folder) if f.endswith(".txt")]
+
+# ======================================================
+# 💾 CHAT SAVE / LOAD
+# ======================================================
+def save_message(user, chat_id, role, content):
+    file = chat_file(user, chat_id)
+    with open(file, "a", encoding="utf-8") as f:
+        f.write(f"{role}:{content}\n")
+
+def load_messages(user, chat_id):
+    file = chat_file(user, chat_id)
+    if not os.path.exists(file):
+        return []
+
+    msgs = []
+    with open(file, "r", encoding="utf-8") as f:
+        for line in f:
+            if ":" in line:
+                r, c = line.split(":", 1)
+                msgs.append({"role": r, "content": c.strip()})
+    return msgs
+
+# ======================================================
+# 🔐 USERS
+# ======================================================
 def create_account(user, pwd):
     file = f"accounts/{user.lower()}.txt"
     if os.path.exists(file):
@@ -56,56 +93,35 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 💾 CHAT SAVE / LOAD (🔥 AJOUT IMPORTANT)
+# 🧠 IA RESPONSE
 # ======================================================
-def get_user_file(user):
-    os.makedirs(f"data/{user}", exist_ok=True)
-    return f"data/{user}/chat.txt"
-
-def save_message(user, role, content):
-    file = get_user_file(user)
-    with open(file, "a", encoding="utf-8") as f:
-        f.write(f"{role.upper()}:{content}\n")
-
-def load_messages(user):
-    file = get_user_file(user)
-    if not os.path.exists(file):
-        return []
-
-    messages = []
-    with open(file, "r", encoding="utf-8") as f:
-        for line in f:
-            if ":" in line:
-                role, content = line.split(":", 1)
-                messages.append({
-                    "role": role.lower(),
-                    "content": content.strip()
-                })
-    return messages
+def generer_reponse(prompt):
+    if st.session_state.humeur == "Raisonnement complexe":
+        return f"Analyse structurée de : {prompt}\n\nJe réfléchis étape par étape..."
+    elif st.session_state.humeur == "Drôle":
+        return f"😄 Haha : {prompt}"
+    elif st.session_state.humeur == "Sérieux":
+        return f"Réponse : {prompt}"
+    else:
+        return f"{st.session_state.nom_ia} : {prompt}"
 
 # ======================================================
-# 🔐 ADMIN BOUTON
+# ✨ STREAMING EFFECT
 # ======================================================
-col1, col2 = st.columns([9, 1])
-
-with col2:
-    if st.button("🔐 Admin"):
-        st.session_state.page = "admin"
-        st.rerun()
+def stream_text(text):
+    placeholder = st.empty()
+    output = ""
+    for char in text:
+        output += char
+        time.sleep(0.01)
+        placeholder.markdown(output)
+    return output
 
 # ======================================================
 # 🏠 HOME
 # ======================================================
 if st.session_state.page == "home":
-
     st.title("🤖 Hartur IA")
-
-    st.info("""
-✔ IA intelligente  
-✔ Comptes utilisateurs  
-✔ Chat sauvegardé  
-✔ Admin dashboard  
-""")
 
     c1, c2 = st.columns(2)
 
@@ -126,18 +142,14 @@ if st.session_state.page == "home":
 # ======================================================
 if st.session_state.page == "signup":
 
-    st.subheader("Créer compte")
-
-    u = st.text_input("Identifiant")
-    p = st.text_input("Mot de passe", type="password")
+    u = st.text_input("User")
+    p = st.text_input("Pass", type="password")
 
     if st.button("Créer"):
         if create_account(u, p):
-            st.success("Compte créé")
+            st.success("OK")
             st.session_state.page = "login"
             st.rerun()
-        else:
-            st.error("Déjà utilisé")
 
     st.stop()
 
@@ -146,10 +158,8 @@ if st.session_state.page == "signup":
 # ======================================================
 if st.session_state.page == "login":
 
-    st.subheader("Connexion")
-
-    u = st.text_input("Identifiant")
-    p = st.text_input("Mot de passe", type="password")
+    u = st.text_input("User")
+    p = st.text_input("Pass", type="password")
 
     if st.button("Connexion"):
 
@@ -159,63 +169,62 @@ if st.session_state.page == "login":
             st.session_state.username = u
             st.session_state.page = "chat"
 
-            # 🔥 CHARGEMENT HISTORIQUE
-            st.session_state.messages = load_messages(u)
+            # 💬 créer chat si aucun
+            chats = list_chats(u)
+            if not chats:
+                st.session_state.current_chat = "chat_1"
+            else:
+                st.session_state.current_chat = chats[-1]
+
+            st.session_state.messages = load_messages(u, st.session_state.current_chat)
 
             st.rerun()
 
-        else:
-            st.error("Erreur login")
-
     st.stop()
-
-# ======================================================
-# 🧠 IA RESPONSE LOGIC
-# ======================================================
-def generer_reponse(prompt):
-
-    if st.session_state.humeur == "Raisonnement complexe":
-
-        return f"""
-🧠 Analyse :
-
-1. Question : {prompt}
-2. Compréhension logique
-3. Analyse étape par étape
-4. Conclusion structurée
-
-👉 Réponse :
-Je vais traiter cela de façon approfondie et structurée.
-"""
-
-    elif st.session_state.humeur == "Drôle":
-        return f"😄 Haha ! {prompt}"
-
-    elif st.session_state.humeur == "Sérieux":
-        return f"Réponse structurée : {prompt}"
-
-    else:
-        return f"{st.session_state.nom_ia} : {prompt}"
 
 # ======================================================
 # 💬 CHAT
 # ======================================================
 if st.session_state.page == "chat" and st.session_state.logged_in:
 
+    user = st.session_state.username
+    chat = st.session_state.current_chat
+
+    # ==================================================
+    # 📌 SIDEBAR (HISTORIQUE)
+    # ==================================================
+    st.sidebar.title("💬 Chats")
+
+    if st.sidebar.button("➕ Nouveau chat"):
+        chat_id = f"chat_{int(time.time())}"
+        st.session_state.current_chat = chat_id
+        st.session_state.messages = []
+        st.rerun()
+
+    for c in list_chats(user):
+        col1, col2 = st.sidebar.columns([8, 2])
+
+        with col1:
+            if st.button(f"🧠 {c}"):
+                st.session_state.current_chat = c
+                st.session_state.messages = load_messages(user, c)
+                st.rerun()
+
+        with col2:
+            if st.button("🗑", key=f"del_{c}"):
+                os.remove(chat_file(user, c))
+                st.rerun()
+
+    # ==================================================
+    # 💬 CHAT UI
+    # ==================================================
     st.title(f"🤖 {st.session_state.nom_ia}")
 
-    st.sidebar.success(f"👤 {st.session_state.username}")
-
-    st.sidebar.subheader("🎭 IA Settings")
-
-    st.session_state.humeur = st.sidebar.selectbox(
+    st.session_state.humeur = st.selectbox(
         "Humeur IA",
-        ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"]
+        ["Cool", "Drôle", "Sérieux", "Raisonnement complexe"]
     )
 
-    st.sidebar.write(f"Mode : {st.session_state.humeur}")
-
-    # 💬 AFFICHAGE CHAT
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
@@ -224,89 +233,17 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     if prompt:
 
-        # USER
-        st.session_state.messages.append({
-            "role": "user",
-            "content": prompt
-        })
-        save_message(st.session_state.username, "user", prompt)
+        # user
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        save_message(user, chat, "user", prompt)
 
         # IA
-        reponse = generer_reponse(prompt)
+        rep = generer_reponse(prompt)
 
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": reponse
-        })
-        save_message(st.session_state.username, "assistant", reponse)
+        with st.chat_message("assistant"):
+            final_text = stream_text(rep)
 
-        st.rerun()
+        st.session_state.messages.append({"role": "assistant", "content": final_text})
+        save_message(user, chat, "assistant", final_text)
 
-    if st.sidebar.button("Déconnexion"):
-        st.session_state.logged_in = False
-        st.session_state.username = None
-        st.session_state.page = "home"
-        st.rerun()
-
-# ======================================================
-# 🔐 ADMIN DASHBOARD
-# ======================================================
-if st.session_state.page == "admin":
-
-    st.title("🔐 ADMIN PANEL")
-
-    mdp = st.text_input("Mot de passe admin", type="password")
-
-    if mdp != "babar":
-        st.warning("Accès refusé")
-        st.stop()
-
-    st.success("Mode admin activé 🔓")
-
-    menu = st.radio(
-        "Navigation Admin",
-        ["📁 Sauvegardes", "👤 Comptes", "💬 Conversations"]
-    )
-
-    if menu == "📁 Sauvegardes":
-
-        st.subheader("📁 Comptes")
-
-        for f in os.listdir("accounts"):
-            with st.expander(f):
-                with open(f"accounts/{f}", "r") as file:
-                    st.text(file.read())
-
-    elif menu == "👤 Comptes":
-
-        st.subheader("👤 Utilisateurs")
-
-        for f in os.listdir("accounts"):
-            st.write("✔", f.replace(".txt", ""))
-
-    elif menu == "💬 Conversations":
-
-        st.subheader("💬 Conversations")
-
-        for d in os.listdir("data"):
-
-            st.write("📅", d)
-
-            for f in os.listdir(f"data/{d}"):
-
-                user = f.replace(".txt", "")
-
-                if st.button(f"👤 {user}"):
-
-                    st.session_state.selected_user = f
-
-                if st.session_state.selected_user == f:
-
-                    st.markdown("### 📜 Conversation")
-
-                    with open(f"data/{d}/{f}", "r") as file:
-                        st.text(file.read())
-
-    if st.button("⬅ Retour app"):
-        st.session_state.page = "home"
         st.rerun()
