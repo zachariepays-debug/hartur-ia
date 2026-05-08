@@ -1,7 +1,7 @@
 import streamlit as st
 import os
-import random
 import requests
+import random
 
 # ======================================================
 # ⚙️ CONFIG
@@ -13,37 +13,35 @@ st.set_page_config(
 )
 
 # ======================================================
-# 🔑 API KEY
+# 🔑 API KEY (IMPORTANT)
 # ======================================================
 OPENAI_API_KEY = "TA_CLE_API_ICI"
 
 # ======================================================
-# 💾 SESSION STATE
+# 💾 SESSION STATE SAFE
 # ======================================================
-if "page" not in st.session_state:
-    st.session_state.page = "home"
+defaults = {
+    "page": "home",
+    "logged_in": False,
+    "username": None,
+    "messages": [],
+    "nom_ia": "Hartur",
+    "selected_user": None
+}
 
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-
-if "username" not in st.session_state:
-    st.session_state.username = None
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "nom_ia" not in st.session_state:
-    st.session_state.nom_ia = "Hartur"
-
-if "selected_user" not in st.session_state:
-    st.session_state.selected_user = None
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # ======================================================
-# 📁 USERS + DATA
+# 📁 SAFE FOLDERS
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 os.makedirs("data", exist_ok=True)
 
+# ======================================================
+# 🔐 USERS SYSTEM
+# ======================================================
 def create_account(user, pwd):
     file = f"accounts/{user.lower()}.txt"
     if os.path.exists(file):
@@ -60,7 +58,46 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🔐 ADMIN
+# 🧠 IA (API PROPRE + SAFE)
+# ======================================================
+def generer_reponse(prompt):
+
+    prompt = prompt.strip()
+
+    if not prompt:
+        return "Dis-moi quelque chose 🙂"
+
+    url = "https://api.openai.com/v1/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": "Tu es Hartur, une IA utile, naturelle, sans répétition, sans phrases robots."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0.8
+    }
+
+    try:
+        r = requests.post(url, headers=headers, json=data, timeout=20)
+        return r.json()["choices"][0]["message"]["content"]
+
+    except Exception:
+        return "Erreur IA (API ou connexion)"
+
+# ======================================================
+# 🔐 ADMIN BUTTON
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
@@ -76,7 +113,7 @@ if st.session_state.page == "home":
 
     st.title("🤖 Hartur IA")
 
-    st.info("✔ IA intelligente ✔ Chat ✔ Comptes ✔ Admin")
+    st.info("✔ IA ✔ Chat ✔ Comptes ✔ Admin")
 
     c1, c2 = st.columns(2)
 
@@ -106,7 +143,7 @@ if st.session_state.page == "signup":
             st.session_state.page = "login"
             st.rerun()
         else:
-            st.error("Déjà existant")
+            st.error("Compte déjà existant")
 
     st.stop()
 
@@ -131,47 +168,6 @@ if st.session_state.page == "login":
     st.stop()
 
 # ======================================================
-# 🧠 IA AVEC API (CORRIGÉE PROPRE)
-# ======================================================
-def generer_reponse(prompt):
-
-    prompt = prompt.strip()
-
-    if not prompt:
-        return "Dis-moi quelque chose 🙂"
-
-    url = "https://api.openai.com/v1/chat/completions"
-
-    headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {
-                "role": "system",
-                "content": "Tu es Hartur, une IA simple, naturelle, utile. Tu réponds clairement sans phrases répétitives ni robotisées."
-            },
-            {
-                "role": "user",
-                "content": prompt
-            }
-        ],
-        "temperature": 0.8
-    }
-
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        result = response.json()
-
-        return result["choices"][0]["message"]["content"]
-
-    except Exception as e:
-        return "Erreur IA : " + str(e)
-
-# ======================================================
 # 💬 CHAT
 # ======================================================
 if st.session_state.page == "chat" and st.session_state.logged_in:
@@ -193,72 +189,61 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
             "content": prompt
         })
 
-        reponse = generer_reponse(prompt)
+        response = generer_reponse(prompt)
 
         st.session_state.messages.append({
             "role": "assistant",
-            "content": reponse
+            "content": response
         })
 
         st.rerun()
 
     if st.sidebar.button("Déconnexion"):
-        st.session_state.logged_in = False
-        st.session_state.username = None
-        st.session_state.page = "home"
+        st.session_state = {}
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN PANEL (FIX BUTTON KEY)
+# 🔐 ADMIN PANEL CLEAN
 # ======================================================
 if st.session_state.page == "admin":
 
     st.title("🔐 ADMIN PANEL")
 
-    mdp = st.text_input("Mot de passe admin", type="password")
+    mdp = st.text_input("Mot de passe", type="password")
 
     if mdp != "babar":
         st.stop()
 
-    menu = st.radio(
-        "Navigation Admin",
-        ["📁 Sauvegardes", "👤 Comptes", "💬 Conversations"]
-    )
+    menu = st.radio("Menu", ["Comptes", "Conversations"])
 
-    if menu == "📁 Sauvegardes":
+    if menu == "Comptes":
 
         for f in os.listdir("accounts"):
-            with st.expander(f):
-                with open(f"accounts/{f}", "r") as file:
-                    st.text(file.read())
+            st.write("✔", f.replace(".txt", ""))
 
-    elif menu == "👤 Comptes":
-
-        for f in os.listdir("accounts"):
-            st.write(f.replace(".txt", ""))
-
-    elif menu == "💬 Conversations":
+    if menu == "Conversations":
 
         if os.path.exists("data"):
 
             for d in os.listdir("data"):
 
-                chemin_d = os.path.join("data", d)
+                path = os.path.join("data", d)
 
-                if not os.path.isdir(chemin_d):
+                if not os.path.isdir(path):
                     continue
 
                 st.write("📅", d)
 
-                for f in os.listdir(chemin_d):
+                for f in os.listdir(path):
 
-                    if st.button(f"👤 {f}", key=f"btn_{d}_{f}"):
+                    key = f"btn_{d}_{f}"
 
+                    if st.button(f"👤 {f}", key=key):
                         st.session_state.selected_user = f
 
                     if st.session_state.selected_user == f:
 
-                        with open(os.path.join(chemin_d, f), "r") as file:
+                        with open(os.path.join(path, f), "r") as file:
                             st.text(file.read())
 
     if st.button("⬅ Retour"):
