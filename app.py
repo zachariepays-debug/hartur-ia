@@ -135,7 +135,7 @@ if st.session_state.page == "login":
     st.stop()
 
 # ======================================================
-# 🧠 IA RESPONSE LOGIC (CORRIGÉ SANS HUMEUR)
+# 🧠 IA RESPONSE LOGIC (CORRIGÉ)
 # ======================================================
 def generer_reponse(prompt):
 
@@ -144,18 +144,29 @@ def generer_reponse(prompt):
     if not prompt:
         return "🤖 Dis-moi quelque chose 🙂"
 
+    p = prompt.lower()
+
+    # petites réponses naturelles
+    if "bonjour" in p:
+        return f"🤖 {st.session_state.nom_ia} : Salut 🙂 Comment je peux t’aider ?"
+
+    if "qui es tu" in p or "t'es qui" in p:
+        return f"🤖 {st.session_state.nom_ia} : Je suis ton assistant IA, ici pour t’aider 🙂"
+
+    if "ça va" in p:
+        return f"🤖 {st.session_state.nom_ia} : Oui ça va 🙂 et toi ?"
+
+    # réponse générale propre (sans répétition)
     return f"""🤖 {st.session_state.nom_ia} :
 
-📌 Tu as dit : {prompt}
+🧠 J’ai bien compris ton message.
 
-🧠 Réponse :
-Je comprends ta demande et je vais y répondre clairement sans répéter ta question inutilement.
+💬 Réponse :
+Je vais t’aider sur ça sans répéter inutilement ton texte.
 
-👉 Analyse :
-Je transforme ton message en réponse utile et structurée.
+👉 Ton message est bien reçu et je peux travailler dessus.
 
-💡 Conclusion :
-Ta demande est prise en compte et traitée correctement.
+💡 Dis-moi plus de détails si tu veux une réponse plus précise 🙂
 """
 
 # ======================================================
