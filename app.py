@@ -53,17 +53,20 @@ def sauvegarder_message(user, texte, reponse):
     horaire = datetime.now().strftime("%H:%M")
     date_jour = datetime.now().strftime("%d-%m-%Y")
     
-    # 1. Sauvegarde ADMIN (Par Date)
+    # --- SAUVEGARDE ADMIN (Par Date) ---
     chemin_admin = f"data/{date_jour}/{user.lower()}"
     os.makedirs(chemin_admin, exist_ok=True)
     with open(f"{chemin_admin}/conversation.txt", "a", encoding="utf-8") as f:
-        f.write(f"[{horaire}] LUI : {texte}\n[{horaire}] IA  : {reponse}\n" + "-"*30 + "\n")
+        # Ajout d'espaces (\n) pour aérer le fichier texte
+        f.write(f"[{horaire}] LUI : {texte}\n")
+        f.write(f"[{horaire}] IA  : {reponse}\n")
+        f.write("\n" + "="*50 + "\n\n") # Grande ligne de séparation et double saut de ligne
     
-    # 2. Sauvegarde PERSO (Historique global)
+    # --- SAUVEGARDE PERSO (Historique global) ---
     chemin_perso = f"user_data/{user.lower()}"
     os.makedirs(chemin_perso, exist_ok=True)
     with open(f"{chemin_perso}/history.txt", "a", encoding="utf-8") as f:
-        f.write(f"LUI : {texte}\nIA  : {reponse}\n")
+        f.write(f"LUI : {texte}\nIA  : {reponse}\n\n") # Saut de ligne après chaque échange
 
 # ======================================================
 # 🧠 IA LOGIQUE
@@ -133,7 +136,7 @@ elif st.session_state.page == "chat":
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN (SÉCURISÉ)
+# 🔐 ADMIN (AVEC ESPACES ET SÉPARATEURS)
 # ======================================================
 elif st.session_state.page == "admin":
     st.title("🔐 Panneau Admin")
@@ -141,7 +144,6 @@ elif st.session_state.page == "admin":
         t1, t2, t3 = st.tabs(["👤 Comptes", "📅 Par Date", "📂 Par Utilisateur"])
         
         with t1:
-            st.subheader("Comptes enregistrés")
             if os.path.exists("accounts"):
                 for f in os.listdir("accounts"):
                     if f.endswith(".txt"):
@@ -149,11 +151,9 @@ elif st.session_state.page == "admin":
                             st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
 
         with t2:
-            st.subheader("Logs par Date")
-            if st.button("🗑️ Vider TOUT l'historique"):
-                for folder in ["data", "user_data"]:
-                    if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder)
-                st.success("C'est tout propre !")
+            if st.button("🗑️ Vider l'historique"):
+                for f in ["data", "user_data"]:
+                    if os.path.exists(f): shutil.rmtree(f); os.makedirs(f)
                 st.rerun()
             
             if os.path.exists("data"):
@@ -163,21 +163,22 @@ elif st.session_state.page == "admin":
                         for u in os.listdir(f"data/{d}"):
                             chemin_u = f"data/{d}/{u}"
                             if os.path.isdir(chemin_u):
-                                st.write(f"**Utilisateur : {u.upper()}**")
+                                st.subheader(f"👤 Utilisateur : {u.upper()}")
                                 conv_path = f"{chemin_u}/conversation.txt"
                                 if os.path.exists(conv_path):
-                                    with open(conv_path, "r", encoding="utf-8") as f: st.text(f.read())
-                                st.divider()
+                                    with open(conv_path, "r", encoding="utf-8") as f:
+                                        # On utilise st.text pour garder le formatage des espaces
+                                        st.text(f.read())
+                                st.divider() # Ligne physique de séparation entre utilisateurs
         
         with t3:
-            st.subheader("Logs par Utilisateur (Complet)")
             if os.path.exists("user_data"):
                 users = [u for u in os.listdir("user_data") if os.path.isdir(f"user_data/{u}")]
                 for u in users:
-                    with st.expander(f"👤 Historique de {u.upper()}"):
+                    with st.expander(f"👤 Historique complet de {u.upper()}"):
                         hist_path = f"user_data/{u}/history.txt"
                         if os.path.exists(hist_path):
-                            with open(hist_path, "r", encoding="utf-8") as f: st.text(f.read())
-                        else: st.write("Aucun message enregistré.")
+                            with open(hist_path, "r", encoding="utf-8") as f:
+                                st.text(f.read())
 
     if st.button("⬅ Retour"): st.session_state.page = "home"; st.rerun()
