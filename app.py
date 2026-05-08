@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 import requests
-import shutil  # Pour supprimer les dossiers proprement
+import shutil
 from datetime import datetime
 
 # ======================================================
@@ -20,7 +20,7 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "humeur" not in st.session_state: st.session_state.humeur = "Cool"
 
 # ======================================================
-# 📁 GESTION DES FICHIERS
+# 📁 GESTION DES FICHIERS ET HISTORIQUE
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 os.makedirs("data", exist_ok=True)
@@ -36,10 +36,28 @@ def login_account(user, pwd):
     if not os.path.exists(file): return False
     with open(file, "r", encoding="utf-8") as f: return f.read().strip() == pwd
 
+def charger_historique_utilisateur(user):
+    """Charge les messages des jours précédents pour l'interface de chat"""
+    historique = []
+    # On parcourt les dossiers de dates pour trouver les messages de l'utilisateur
+    if os.path.exists("data"):
+        for date_dir in sorted(os.listdir("data")):
+            chemin_conv = f"data/{date_dir}/{user.lower()}/conversation.txt"
+            if os.path.exists(chemin_conv):
+                with open(chemin_conv, "r", encoding="utf-8") as f:
+                    lignes = f.readlines()
+                    for ligne in lignes:
+                        if "LUI :" in ligne:
+                            contenu = ligne.split("LUI :")[1].strip()
+                            historique.append({"role": "user", "content": contenu})
+                        elif "IA  :" in ligne:
+                            contenu = ligne.split("IA  :")[1].strip()
+                            historique.append({"role": "assistant", "content": contenu})
+    return historique
+
 def sauvegarder_message_local(user, texte, reponse):
     date_jour = datetime.now().strftime("%d-%m-%Y")
-    chemin_date = f"data/{date_jour}"
-    chemin_user = f"{chemin_date}/{user.lower()}"
+    chemin_user = f"data/{date_jour}/{user.lower()}"
     os.makedirs(chemin_user, exist_ok=True)
     
     chemin_fichier = f"{chemin_user}/conversation.txt"
@@ -103,13 +121,20 @@ elif st.session_state.page == "login":
         if login_account(u, p):
             st.session_state.logged_in = True
             st.session_state.username = u
+            # CHARGEMENT DE L'HISTORIQUE ICI
+            st.session_state.messages = charger_historique_utilisateur(u)
             st.session_state.page = "chat"; st.rerun()
+        else: st.error("Erreur de login.")
 
 elif st.session_state.page == "chat":
     st.title(f"🤖 Chat")
+    st.sidebar.write(f"Utilisateur : **{st.session_state.username}**")
     st.session_state.humeur = st.sidebar.selectbox("Mood", ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"])
+    
+    # Affichage de l'historique (anciens + nouveaux messages)
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
+
     prompt = st.chat_input("Dis un truc...")
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -119,46 +144,39 @@ elif st.session_state.page == "chat":
         with st.chat_message("assistant"): st.markdown(reponse)
         sauvegarder_message_local(st.session_state.username, prompt, reponse)
 
+    if st.sidebar.button("Déconnexion"):
+        st.session_state.logged_in = False
+        st.session_state.messages = []
+        st.session_state.page = "home"; st.rerun()
+
 # ======================================================
-# 🔐 ADMIN (AVEC FONCTION SUPPRESSION)
+# 🔐 ADMIN
 # ======================================================
 elif st.session_state.page == "admin":
     st.title("🔐 Panneau Admin")
-    if st.text_input("Mot de passe maître", type="password") == "babar":
-        
+    if st.text_input("Mot de passe", type="password") == "babar":
         tab1, tab2 = st.tabs(["👤 Comptes", "💬 Conversations"])
-        
         with tab1:
-            st.subheader("Gestion des comptes")
             for f in os.listdir("accounts"):
                 with open(f"accounts/{f}", "r") as file:
                     st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
-
         with tab2:
-            st.subheader("Archives des conversations")
-            
-            # --- LE BOUTON DE SUPPRESSION ---
-            if st.button("🗑️ Supprimer TOUTES les archives"):
+            if st.button("🗑️ Vider l'historique complet"):
                 if os.path.exists("data"):
                     shutil.rmtree("data")
                     os.makedirs("data")
-                    st.success("Toutes les dates et conversations ont été supprimées !")
                     st.rerun()
-            
             st.divider()
-
-            # Affichage des dates
             dates = sorted([d for d in os.listdir("data") if os.path.isdir(f"data/{d}")], reverse=True)
             for d in dates:
                 with st.expander(f"📅 Date : {d}"):
                     chemin_date = f"data/{d}"
-                    users_today = [u for u in os.listdir(chemin_date) if os.path.isdir(f"{chemin_date}/{u}")]
-                    for u in users_today:
-                        st.markdown(f"**👤 Utilisateur : {u.upper()}**")
+                    users = [u for u in os.listdir(chemin_date) if os.path.isdir(f"{chemin_date}/{u}")]
+                    for u in users:
+                        st.markdown(f"**📂 Dossier Utilisateur : {u.upper()}**")
                         chemin_conv = f"{chemin_date}/{u}/conversation.txt"
                         if os.path.exists(chemin_conv):
                             with open(chemin_conv, "r", encoding="utf-8") as f:
                                 st.text(f.read())
                         st.divider()
-
     if st.button("⬅ Retour"): st.session_state.page = "home"; st.rerun()
