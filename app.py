@@ -28,14 +28,11 @@ if "messages" not in st.session_state:
 if "nom_ia" not in st.session_state:
     st.session_state.nom_ia = "Hartur"
 
-if "humeur" not in st.session_state:
-    st.session_state.humeur = "Cool"
-
 if "selected_user" not in st.session_state:
     st.session_state.selected_user = None
 
 # ======================================================
-# 📁 USERS + DATA
+# 📁 DATA
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 os.makedirs("data", exist_ok=True)
@@ -56,7 +53,7 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🔐 ADMIN BOUTON
+# 🔐 ADMIN BUTTON
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
@@ -71,13 +68,6 @@ with col2:
 if st.session_state.page == "home":
 
     st.title("🤖 Hartur IA")
-
-    st.info("""
-✔ IA intelligente  
-✔ Comptes utilisateurs  
-✔ Chat sauvegardé  
-✔ Admin dashboard  
-""")
 
     c1, c2 = st.columns(2)
 
@@ -98,8 +88,6 @@ if st.session_state.page == "home":
 # ======================================================
 if st.session_state.page == "signup":
 
-    st.subheader("Créer compte")
-
     u = st.text_input("Identifiant")
     p = st.text_input("Mot de passe", type="password")
 
@@ -118,52 +106,19 @@ if st.session_state.page == "signup":
 # ======================================================
 if st.session_state.page == "login":
 
-    st.subheader("Connexion")
-
     u = st.text_input("Identifiant")
     p = st.text_input("Mot de passe", type="password")
 
     if st.button("Connexion"):
-
         if login_account(u, p):
-
             st.session_state.logged_in = True
             st.session_state.username = u
             st.session_state.page = "chat"
             st.rerun()
-
         else:
             st.error("Erreur login")
 
     st.stop()
-
-# ======================================================
-# 🧠 IA RESPONSE LOGIC
-# ======================================================
-def generer_reponse(prompt):
-
-    if st.session_state.humeur == "Raisonnement complexe":
-
-        return f"""
-🧠 Analyse :
-
-1. Question : {prompt}
-2. Compréhension logique
-3. Analyse étape par étape
-4. Conclusion structurée
-
-👉 Réponse :
-Je vais traiter cela de façon approfondie et structurée.
-"""
-
-    elif st.session_state.humeur == "Drôle":
-        return f"😄 Haha ! {prompt}"
-
-    elif st.session_state.humeur == "Sérieux":
-        return f"Réponse structurée : {prompt}"
-
-    else:
-        return f"{st.session_state.nom_ia} : {prompt}"
 
 # ======================================================
 # 💬 CHAT
@@ -174,17 +129,6 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     st.sidebar.success(f"👤 {st.session_state.username}")
 
-    # 🎭 IA SETTINGS
-    st.sidebar.subheader("🎭 IA Settings")
-
-    st.session_state.humeur = st.sidebar.selectbox(
-        "Humeur IA",
-        ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"]
-    )
-
-    st.sidebar.write(f"Mode : {st.session_state.humeur}")
-
-    # 💬 CHAT
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
@@ -198,7 +142,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
             "content": prompt
         })
 
-        reponse = generer_reponse(prompt)
+        reponse = f"{st.session_state.nom_ia} répond 🤖"
 
         st.session_state.messages.append({
             "role": "assistant",
@@ -214,7 +158,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN DASHBOARD + CONVERSATIONS CLIQUABLES
+# 🔐 ADMIN PANEL (AVEC BULLES MODERNES)
 # ======================================================
 if st.session_state.page == "admin":
 
@@ -229,11 +173,13 @@ if st.session_state.page == "admin":
     st.success("Mode admin activé 🔓")
 
     menu = st.radio(
-        "Navigation Admin",
+        "Navigation",
         ["📁 Sauvegardes", "👤 Comptes", "💬 Conversations"]
     )
 
+    # ==================================================
     # 📁 COMPTES
+    # ==================================================
     if menu == "📁 Sauvegardes":
 
         st.subheader("📁 Comptes")
@@ -243,7 +189,9 @@ if st.session_state.page == "admin":
                 with open(f"accounts/{f}", "r") as file:
                     st.text(file.read())
 
+    # ==================================================
     # 👤 USERS
+    # ==================================================
     elif menu == "👤 Comptes":
 
         st.subheader("👤 Utilisateurs")
@@ -251,10 +199,12 @@ if st.session_state.page == "admin":
         for f in os.listdir("accounts"):
             st.write("✔", f.replace(".txt", ""))
 
-    # 💬 CONVERSATIONS CLIQUABLES
+    # ==================================================
+    # 💬 CONVERSATIONS (VERSION BULLES MODERNES)
+    # ==================================================
     elif menu == "💬 Conversations":
 
-        st.subheader("💬 Conversations")
+        st.subheader("💬 Conversations utilisateurs")
 
         for d in os.listdir("data"):
 
@@ -268,13 +218,71 @@ if st.session_state.page == "admin":
 
                     st.session_state.selected_user = f
 
+                # ==================================================
+                # 💬 AFFICHAGE CHAT STYLE BULLES
+                # ==================================================
                 if st.session_state.selected_user == f:
 
                     st.markdown("### 📜 Conversation")
 
-                    with open(f"data/{d}/{f}", "r") as file:
-                        st.text(file.read())
+                    file_path = f"data/{d}/{f}"
 
-    if st.button("⬅ Retour app"):
-        st.session_state.page = "home"
-        st.rerun()
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as file:
+                            lines = file.readlines()
+
+                        for line in lines:
+
+                            line = line.strip()
+
+                            if not line:
+                                continue
+
+                            # 👤 USER
+                            if line.startswith("USER:"):
+
+                                msg = line.replace("USER:", "").strip()
+
+                                st.markdown(
+                                    f"""
+                                    <div style="
+                                        background:#2b2b2b;
+                                        color:white;
+                                        padding:10px;
+                                        border-radius:15px;
+                                        margin:6px 0;
+                                        width:70%;
+                                        margin-left:auto;
+                                        text-align:right;
+                                    ">
+                                    👤 {msg}
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+
+                            # 🤖 IA
+                            elif line.startswith("IA:"):
+
+                                msg = line.replace("IA:", "").strip()
+
+                                st.markdown(
+                                    f"""
+                                    <div style="
+                                        background:#1f6fff;
+                                        color:white;
+                                        padding:10px;
+                                        border-radius:15px;
+                                        margin:6px 0;
+                                        width:70%;
+                                        margin-right:auto;
+                                        text-align:left;
+                                    ">
+                                    🤖 {msg}
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+
+                    except Exception as e:
+                        st.error(f"Erreur : {e}")
