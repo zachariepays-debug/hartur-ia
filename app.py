@@ -25,13 +25,6 @@ if "username" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "role" not in st.session_state:
-    st.session_state.role = "user"
-
-if "admin_popup" not in st.session_state:
-    st.session_state.admin_popup = False
-
-# 🔒 IA VERROUILLÉE (IMPORTANT)
 if "nom_ia" not in st.session_state:
     st.session_state.nom_ia = "Hartur"
 
@@ -56,58 +49,28 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🔐 ADMIN BUTTON (TOUJOURS VISIBLE)
+# 🔐 NAVIGATION ADMIN (bouton global)
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
 with col2:
     if st.button("🔐 Admin"):
-        st.session_state.admin_popup = True
+        st.session_state.page = "admin"
+        st.rerun()
 
 # ======================================================
-# 🔐 ADMIN POPUP (CORRIGÉ)
-# ======================================================
-if st.session_state.admin_popup:
-
-    st.warning("🔐 Accès Admin")
-
-    mdp = st.text_input("Mot de passe admin", type="password")
-
-    c1, c2 = st.columns(2)
-
-    with c1:
-        if st.button("Valider"):
-
-            if mdp == "babar":
-
-                st.session_state.role = "admin"
-                st.session_state.admin_popup = False
-
-                st.success("Mode admin activé 🔓")
-                st.rerun()
-
-            else:
-                st.error("Mot de passe incorrect")
-
-    with c2:
-        if st.button("Annuler"):
-            st.session_state.admin_popup = False
-            st.rerun()
-
-    st.stop()
-
-# ======================================================
-# 🏠 HOME PAGE
+# 🏠 HOME
 # ======================================================
 if st.session_state.page == "home":
 
     st.title("🤖 Hartur IA")
 
     st.info("""
-✔ IA intelligente  
+Bienvenue 👋  
+✔ Chat IA  
 ✔ Comptes utilisateurs  
-✔ Chat sauvegardé  
-✔ Mode admin sécurisé  
+✔ Sauvegarde conversations  
+✔ Mode admin séparé  
 """)
 
     c1, c2 = st.columns(2)
@@ -129,7 +92,7 @@ if st.session_state.page == "home":
 # ======================================================
 if st.session_state.page == "signup":
 
-    st.subheader("Créer compte")
+    st.subheader("Créer un compte")
 
     u = st.text_input("Identifiant")
     p = st.text_input("Mot de passe", type="password")
@@ -141,7 +104,7 @@ if st.session_state.page == "signup":
             st.session_state.page = "login"
             st.rerun()
         else:
-            st.error("Identifiant déjà utilisé")
+            st.error("Déjà utilisé")
 
     if st.button("Retour"):
         st.session_state.page = "home"
@@ -166,7 +129,6 @@ if st.session_state.page == "login":
             st.session_state.logged_in = True
             st.session_state.username = u
             st.session_state.page = "chat"
-
             st.rerun()
 
         else:
@@ -179,34 +141,19 @@ if st.session_state.page == "login":
     st.stop()
 
 # ======================================================
-# 💬 CHAT PAGE
+# 💬 CHAT
 # ======================================================
 if st.session_state.page == "chat" and st.session_state.logged_in:
 
-    # 🔒 NOM IA VERROUILLÉ (NON MODIFIABLE)
     st.title(f"🤖 {st.session_state.nom_ia}")
 
     st.sidebar.success(f"👤 {st.session_state.username}")
 
-    # ==================================================
-    # 🔐 ADMIN PANEL
-    # ==================================================
-    if st.session_state.role == "admin":
-
-        st.subheader("🔐 ADMIN PANEL")
-
-        st.success("Mode administrateur actif")
-
-        st.write("✔ Comptes utilisateurs")
-        st.write("✔ Conversations globales")
-        st.write("✔ Logs système")
-
-        if st.button("Quitter admin"):
-            st.session_state.role = "user"
-            st.rerun()
+    # 🔒 NOM IA VERROUILLÉ
+    st.sidebar.write(f"IA : {st.session_state.nom_ia}")
 
     # ==================================================
-    # 💬 CHAT
+    # 💬 MESSAGES
     # ==================================================
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
@@ -230,12 +177,37 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
         st.rerun()
 
-    # ==================================================
-    # 🚪 LOGOUT
-    # ==================================================
     if st.sidebar.button("Déconnexion"):
         st.session_state.logged_in = False
         st.session_state.username = None
         st.session_state.page = "home"
-        st.session_state.role = "user"
         st.rerun()
+
+# ======================================================
+# 🔐 ADMIN PAGE (VRAIE PAGE SÉPARÉE)
+# ======================================================
+if st.session_state.page == "admin":
+
+    st.title("🔐 ADMIN PANEL")
+
+    mdp = st.text_input("Mot de passe admin", type="password")
+
+    if mdp != "babar":
+
+        st.warning("Accès refusé")
+        st.stop()
+
+    st.success("Mode admin activé 🔓")
+
+    st.write("📊 Dashboard admin")
+
+    st.write("👤 Comptes utilisateurs")
+    st.write("💬 Conversations")
+    st.write("📁 Logs système")
+
+    if st.button("⬅ Retour application"):
+
+        st.session_state.page = "home"
+        st.rerun()
+
+    st.stop()
