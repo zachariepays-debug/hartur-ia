@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-import uuid
 
 # ======================================================
 # ⚙️ CONFIG
@@ -15,7 +14,7 @@ st.set_page_config(
 # 💾 SESSION
 # ======================================================
 if "page" not in st.session_state:
-    st.session_state.page = "home"  # home / login / signup / chat
+    st.session_state.page = "home"
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -23,55 +22,52 @@ if "logged_in" not in st.session_state:
 if "username" not in st.session_state:
     st.session_state.username = None
 
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
 if "admin_mode" not in st.session_state:
     st.session_state.admin_mode = False
 
 if "admin_popup" not in st.session_state:
     st.session_state.admin_popup = False
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# 🎭 PERSONNALISATION IA
+if "humeur" not in st.session_state:
+    st.session_state.humeur = "Cool"
+
+if "style" not in st.session_state:
+    st.session_state.style = "Normal"
+
+if "nom_ia" not in st.session_state:
+    st.session_state.nom_ia = "Hartur"
 
 # ======================================================
-# 📁 USERS FILES
+# 📁 USERS
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 
-# ======================================================
-# 👤 CREATE ACCOUNT
-# ======================================================
 def create_account(user, pwd):
-
     file = f"accounts/{user.lower()}.txt"
-
     if os.path.exists(file):
         return False
-
     with open(file, "w") as f:
         f.write(pwd)
-
     return True
 
-# ======================================================
-# 🔑 LOGIN
-# ======================================================
 def login_account(user, pwd):
-
     file = f"accounts/{user.lower()}.txt"
-
     if not os.path.exists(file):
         return False
-
     with open(file, "r") as f:
         return f.read() == pwd
 
 # ======================================================
-# 🔐 BOUTON ADMIN
+# 🔐 BOUTON ADMIN (EN HAUT DROITE)
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
 with col2:
-    if st.button("🔐"):
+    if st.button("🔐 Admin"):
         st.session_state.admin_popup = True
 
 # ======================================================
@@ -79,7 +75,7 @@ with col2:
 # ======================================================
 if st.session_state.admin_popup:
 
-    st.warning("Mode Admin")
+    st.warning("Accès Admin")
 
     mdp = st.text_input("Mot de passe", type="password")
 
@@ -101,97 +97,83 @@ if st.session_state.admin_popup:
     st.stop()
 
 # ======================================================
-# 🏠 PAGE D'ACCUEIL (DESCRIPTION IA)
+# 🏠 HOME
 # ======================================================
 if st.session_state.page == "home":
 
     st.title("🤖 Hartur IA")
 
     st.info("""
-Bienvenue sur Hartur IA 👋
-
-✔ Une IA intelligente  
-✔ Chat personnalisé  
+✔ IA intelligente personnalisable  
 ✔ Comptes utilisateurs  
-✔ Mémoire des conversations  
-
-👉 Choisis une option ci-dessous
+✔ Chat avec mémoire  
+✔ Mode admin  
 """)
 
     c1, c2 = st.columns(2)
 
     with c1:
-        if st.button("🔑 Se connecter"):
+        if st.button("🔑 Connexion"):
             st.session_state.page = "login"
             st.rerun()
 
     with c2:
-        if st.button("🆕 Créer un compte"):
+        if st.button("🆕 Créer compte"):
             st.session_state.page = "signup"
             st.rerun()
 
     st.stop()
 
 # ======================================================
-# 🆕 CREER COMPTE
+# 🆕 SIGNUP
 # ======================================================
 if st.session_state.page == "signup":
 
-    st.subheader("🆕 Créer un compte")
+    st.subheader("Créer un compte")
 
-    user = st.text_input("Identifiant")
-    pwd = st.text_input("Mot de passe", type="password")
+    u = st.text_input("Identifiant")
+    p = st.text_input("Mot de passe", type="password")
 
-    c1, c2 = st.columns(2)
+    if st.button("Créer"):
 
-    with c1:
-        if st.button("Créer"):
-
-            if create_account(user, pwd):
-
-                st.success("Compte créé 😄")
-                st.session_state.page = "login"
-                st.rerun()
-
-            else:
-                st.error("Identifiant déjà utilisé")
-
-    with c2:
-        if st.button("Retour"):
-            st.session_state.page = "home"
+        if create_account(u, p):
+            st.success("Compte créé")
+            st.session_state.page = "login"
             st.rerun()
+        else:
+            st.error("Identifiant déjà utilisé")
+
+    if st.button("Retour"):
+        st.session_state.page = "home"
+        st.rerun()
 
     st.stop()
 
 # ======================================================
-# 🔑 LOGIN PAGE
+# 🔑 LOGIN
 # ======================================================
 if st.session_state.page == "login":
 
-    st.subheader("🔑 Connexion")
+    st.subheader("Connexion")
 
-    user = st.text_input("Identifiant")
-    pwd = st.text_input("Mot de passe", type="password")
+    u = st.text_input("Identifiant")
+    p = st.text_input("Mot de passe", type="password")
 
-    c1, c2 = st.columns(2)
+    if st.button("Connexion"):
 
-    with c1:
-        if st.button("Connexion"):
+        if login_account(u, p):
 
-            if login_account(user, pwd):
-
-                st.session_state.logged_in = True
-                st.session_state.username = user
-                st.session_state.page = "chat"
-                st.rerun()
-
-            else:
-                st.error("Identifiants incorrects")
-
-    with c2:
-        if st.button("Retour"):
-            st.session_state.page = "home"
+            st.session_state.logged_in = True
+            st.session_state.username = u
+            st.session_state.page = "chat"
             st.rerun()
+
+        else:
+            st.error("Erreur login")
+
+    if st.button("Retour"):
+        st.session_state.page = "home"
+        st.rerun()
 
     st.stop()
 
@@ -200,7 +182,7 @@ if st.session_state.page == "login":
 # ======================================================
 if st.session_state.page == "chat" and st.session_state.logged_in:
 
-    st.title("🤖 Hartur IA")
+    st.title(f"🤖 {st.session_state.nom_ia}")
 
     st.sidebar.success(f"👤 {st.session_state.username}")
 
@@ -210,12 +192,38 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         st.session_state.page = "home"
         st.rerun()
 
-    # ADMIN MODE
-    if st.session_state.admin_mode:
-        st.subheader("🔐 ADMIN PANEL")
-        st.write("Comptes + stats ici")
+    # ==================================================
+    # ⚙️ PERSONNALISATION IA (VISIBLE UTILISATEUR)
+    # ==================================================
+    st.sidebar.subheader("⚙️ Personnalisation IA")
 
-    # CHAT
+    st.session_state.humeur = st.sidebar.selectbox(
+        "Humeur",
+        ["Cool", "Drôle", "Gentil", "Sarcastique"]
+    )
+
+    st.session_state.style = st.sidebar.selectbox(
+        "Style",
+        ["Normal", "Familier", "Poli"]
+    )
+
+    st.session_state.nom_ia = st.sidebar.text_input(
+        "Nom IA",
+        st.session_state.nom_ia
+    )
+
+    # ==================================================
+    # 🔐 ADMIN PANEL
+    # ==================================================
+    if st.session_state.admin_mode:
+        st.subheader("🔐 ADMIN MODE")
+        st.write("✔ Comptes")
+        st.write("✔ Conversations")
+        st.write("✔ Stats")
+
+    # ==================================================
+    # 💬 CHAT
+    # ==================================================
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
@@ -229,7 +237,8 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
             "content": prompt
         })
 
-        reponse = "IA réponse (à connecter)"
+        # 🤖 réponse simple (à connecter IA après)
+        reponse = f"({st.session_state.nom_ia}) répond en mode {st.session_state.humeur}"
 
         st.session_state.messages.append({
             "role": "assistant",
