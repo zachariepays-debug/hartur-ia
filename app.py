@@ -90,56 +90,86 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🧠 IA RESPONSE LOGIC (✔ CORRIGÉ ICI)
+# 🧠 IA RESPONSE
 # ======================================================
 def generer_reponse(prompt):
 
-    # 🧠 Raisonnement complexe
-    if st.session_state.humeur == "Raisonnement complexe":
-
-        return f"""
-🧠 Analyse :
-
-Question : {prompt}
-
-1️⃣ Compréhension :
-Je comprends que tu demandes → {prompt}
-
-2️⃣ Analyse :
-Je structure la réponse étape par étape.
-
-3️⃣ Conclusion :
-
-👉 Réponse :
-Je vais t’aider de manière claire et détaillée.
-"""
-
-    # 😄 Drôle
     if st.session_state.humeur == "Drôle":
-        return f"😄 Haha ! Tu viens de dire : '{prompt}' 😂"
+        return f"😄 Haha : {prompt}"
 
-    # 🎯 Sérieux
     if st.session_state.humeur == "Sérieux":
-        return f"📌 Je comprends ta demande → {prompt}. Voici une réponse claire."
+        return f"📌 Réponse : {prompt}"
 
-    # 😏 Sarcastique
     if st.session_state.humeur == "Sarcastique":
-        return f"🙃 Wow… '{prompt}'… quelle question fascinante."
+        return f"🙃 Sérieusement ? {prompt}"
 
-    # 🌿 Cool
-    return f"🤖 {st.session_state.nom_ia} : J’ai bien compris → {prompt}"
+    return f"🤖 {st.session_state.nom_ia} : {prompt}"
 
 # ======================================================
-# ✨ STREAM TEXT
+# 🏠 HOME
 # ======================================================
-def stream_text(text):
-    placeholder = st.empty()
-    output = ""
-    for char in text:
-        output += char
-        time.sleep(0.01)
-        placeholder.markdown(output)
-    return output
+if st.session_state.page == "home":
+
+    st.title("🤖 Hartur IA")
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        if st.button("🔑 Connexion"):
+            st.session_state.page = "login"
+            st.rerun()
+
+    with c2:
+        if st.button("🆕 Créer compte"):
+            st.session_state.page = "signup"
+            st.rerun()
+
+    st.stop()
+
+# ======================================================
+# 🆕 SIGNUP
+# ======================================================
+if st.session_state.page == "signup":
+
+    u = st.text_input("User")
+    p = st.text_input("Pass", type="password")
+
+    if st.button("Créer"):
+        if create_account(u, p):
+            st.success("OK")
+            st.session_state.page = "login"
+            st.rerun()
+
+    st.stop()
+
+# ======================================================
+# 🔑 LOGIN
+# ======================================================
+if st.session_state.page == "login":
+
+    u = st.text_input("User")
+    p = st.text_input("Pass", type="password")
+
+    if st.button("Connexion"):
+
+        if login_account(u, p):
+
+            st.session_state.logged_in = True
+            st.session_state.username = u
+            st.session_state.page = "chat"
+
+            chats = list_chats(u)
+
+            if chats:
+                st.session_state.current_chat = chats[-1]
+                st.session_state.messages = load_messages(u, chats[-1])
+            else:
+                st.session_state.current_chat = f"chat_{int(time.time())}"
+                st.session_state.messages = []
+
+            st.rerun()
+
+    st.stop()
 
 # ======================================================
 # 💬 CHAT
@@ -149,6 +179,9 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
     user = st.session_state.username
     chat = st.session_state.current_chat
 
+    # ==================================================
+    # 🧠 HEADER
+    # ==================================================
     col1, col2, col3 = st.columns([7, 2, 1])
 
     with col1:
@@ -166,11 +199,17 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
             st.session_state.page = "admin"
             st.rerun()
 
+    # ==================================================
+    # 🎭 IA MODE
+    # ==================================================
     st.session_state.humeur = st.selectbox(
         "Humeur IA",
-        ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"]
+        ["Cool", "Drôle", "Sérieux", "Sarcastique"]
     )
 
+    # ==================================================
+    # 💬 DISPLAY CHAT
+    # ==================================================
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
@@ -182,12 +221,42 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         st.session_state.messages.append({"role": "user", "content": prompt})
         save_message(user, chat, "user", prompt)
 
-        reponse = generer_reponse(prompt)
+        rep = generer_reponse(prompt)
 
-        with st.chat_message("assistant"):
-            final = stream_text(reponse)
+        st.session_state.messages.append({"role": "assistant", "content": rep})
+        save_message(user, chat, "assistant", rep)
 
-        st.session_state.messages.append({"role": "assistant", "content": final})
-        save_message(user, chat, "assistant", final)
+        st.rerun()
 
+# ======================================================
+# 🔐 ADMIN (FIX SANS ÉCRAN NOIR)
+# ======================================================
+if st.session_state.page == "admin":
+
+    st.title("🔐 ADMIN PANEL")
+
+    mdp = st.text_input("Mot de passe admin", type="password")
+
+    if mdp != "babar":
+        st.warning("Accès refusé")
+        st.stop()
+
+    st.success("Admin activé 🔓")
+
+    menu = st.radio("Menu", ["Comptes", "Conversations"])
+
+    if menu == "Comptes":
+        for f in os.listdir("accounts"):
+            st.write(f.replace(".txt", ""))
+
+    if menu == "Conversations":
+        for user in os.listdir("data"):
+            st.subheader(user)
+            for chat in os.listdir(f"data/{user}"):
+                if st.button(f"{chat}", key=f"{user}_{chat}"):
+                    with open(f"data/{user}/{chat}", "r", encoding="utf-8") as f:
+                        st.text(f.read())
+
+    if st.button("⬅ Retour"):
+        st.session_state.page = "home"
         st.rerun()
