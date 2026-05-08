@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import random
 
 # ======================================================
 # ⚙️ CONFIG
@@ -135,7 +136,7 @@ if st.session_state.page == "login":
     st.stop()
 
 # ======================================================
-# 🧠 IA RESPONSE LOGIC (CORRIGÉ)
+# 🧠 IA RESPONSE LOGIC (CORRIGÉ VRAIMENT)
 # ======================================================
 def generer_reponse(prompt):
 
@@ -146,27 +147,31 @@ def generer_reponse(prompt):
 
     p = prompt.lower()
 
-    # petites réponses naturelles
+    # réponses simples naturelles
     if "bonjour" in p:
-        return f"🤖 {st.session_state.nom_ia} : Salut 🙂 Comment je peux t’aider ?"
-
-    if "qui es tu" in p or "t'es qui" in p:
-        return f"🤖 {st.session_state.nom_ia} : Je suis ton assistant IA, ici pour t’aider 🙂"
+        return f"🤖 {st.session_state.nom_ia} : Salut 🙂 comment je peux t’aider ?"
 
     if "ça va" in p:
-        return f"🤖 {st.session_state.nom_ia} : Oui ça va 🙂 et toi ?"
+        return f"🤖 {st.session_state.nom_ia} : Oui ça va bien 🙂 et toi ?"
 
-    # réponse générale propre (sans répétition)
+    if "qui es tu" in p or "t'es qui" in p:
+        return f"🤖 {st.session_state.nom_ia} : Je suis ton assistant IA 🙂"
+
+    # 💡 réponse fluide NON répétitive (version améliorée)
+    base_reponses = [
+        "J’ai bien compris ton message 👍",
+        "Ok, je vois ce que tu veux dire 🙂",
+        "D’accord, je prends en compte ta demande 👌",
+        "Je comprends 👍 on peut aller plus loin si tu veux"
+    ]
+
+    reponse = random.choice(base_reponses)
+
     return f"""🤖 {st.session_state.nom_ia} :
 
-🧠 J’ai bien compris ton message.
+🧠 {reponse}
 
-💬 Réponse :
-Je vais t’aider sur ça sans répéter inutilement ton texte.
-
-👉 Ton message est bien reçu et je peux travailler dessus.
-
-💡 Dis-moi plus de détails si tu veux une réponse plus précise 🙂
+💬 Si tu veux, précise ta demande et je t’aide plus en détail 🙂
 """
 
 # ======================================================
