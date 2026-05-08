@@ -136,7 +136,7 @@ if st.session_state.page == "login":
     st.stop()
 
 # ======================================================
-# 🧠 IA RESPONSE LOGIC
+# 🧠 IA RESPONSE
 # ======================================================
 def generer_reponse(prompt):
 
@@ -148,27 +148,22 @@ def generer_reponse(prompt):
     p = prompt.lower()
 
     if "bonjour" in p:
-        return f"🤖 {st.session_state.nom_ia} : Salut 🙂 comment je peux t’aider ?"
+        return f"🤖 {st.session_state.nom_ia} : Salut 🙂"
 
     if "ça va" in p:
-        return f"🤖 {st.session_state.nom_ia} : Oui ça va bien 🙂 et toi ?"
+        return f"🤖 {st.session_state.nom_ia} : Oui ça va 🙂 et toi ?"
 
-    if "qui es tu" in p or "t'es qui" in p:
+    if "qui es tu" in p:
         return f"🤖 {st.session_state.nom_ia} : Je suis ton assistant IA 🙂"
 
-    reponses = [
-        "J’ai bien compris ton message 👍",
-        "Ok, je vois ce que tu veux dire 🙂",
-        "D’accord, je prends en compte ta demande 👌",
-        "Je comprends 👍 on peut aller plus loin si tu veux"
+    base = [
+        "J’ai bien compris 👍",
+        "Ok je vois 🙂",
+        "D’accord 👌",
+        "Je comprends 👍"
     ]
 
-    return f"""🤖 {st.session_state.nom_ia} :
-
-🧠 {random.choice(reponses)}
-
-💬 Dis-moi si tu veux plus de détails 🙂
-"""
+    return f"🤖 {st.session_state.nom_ia} : {random.choice(base)}"
 
 # ======================================================
 # 💬 CHAT
@@ -208,7 +203,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN DASHBOARD (BUG FIX ICI)
+# 🔐 ADMIN
 # ======================================================
 if st.session_state.page == "admin":
 
@@ -229,16 +224,12 @@ if st.session_state.page == "admin":
 
     if menu == "📁 Sauvegardes":
 
-        st.subheader("📁 Comptes")
-
         for f in os.listdir("accounts"):
             with st.expander(f):
                 with open(f"accounts/{f}", "r") as file:
                     st.text(file.read())
 
     elif menu == "👤 Comptes":
-
-        st.subheader("👤 Utilisateurs")
 
         for f in os.listdir("accounts"):
             st.write("✔", f.replace(".txt", ""))
@@ -247,25 +238,35 @@ if st.session_state.page == "admin":
 
         st.subheader("💬 Conversations")
 
-        for d in os.listdir("data"):
+        # 🔥 FIX COMPLET + SAFE
+        data_path = "data"
 
-            st.write("📅", d)
+        if os.path.exists(data_path):
 
-            for f in os.listdir(f"data/{d}"):
+            for d in os.listdir(data_path):
 
-                user = f.replace(".txt", "")
+                chemin_d = os.path.join(data_path, d)
 
-                # 🔥 FIX IMPORTANT STREAMLIT DUPLICATE ID
-                if st.button(f"👤 {user}", key=f"btn_{d}_{f}"):
+                # ✔ on ignore si ce n'est pas un dossier
+                if not os.path.isdir(chemin_d):
+                    continue
 
-                    st.session_state.selected_user = f
+                st.write("📅", d)
 
-                if st.session_state.selected_user == f:
+                for f in os.listdir(chemin_d):
 
-                    st.markdown("### 📜 Conversation")
+                    user = f.replace(".txt", "")
 
-                    with open(f"data/{d}/{f}", "r") as file:
-                        st.text(file.read())
+                    if st.button(f"👤 {user}", key=f"btn_{d}_{f}"):
+
+                        st.session_state.selected_user = f
+
+                    if st.session_state.selected_user == f:
+
+                        st.markdown("### 📜 Conversation")
+
+                        with open(os.path.join(chemin_d, f), "r") as file:
+                            st.text(file.read())
 
     if st.button("⬅ Retour app"):
         st.session_state.page = "home"
