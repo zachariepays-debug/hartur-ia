@@ -43,8 +43,12 @@ def charger_historique_utilisateur(user):
     if os.path.exists(chemin_perso):
         with open(chemin_perso, "r", encoding="utf-8") as f:
             for ligne in f:
-                if "LUI :" in ligne:
-                    historique.append({"role": "user", "content": ligne.split("LUI :")[1].strip()})
+                # On cherche soit "LUI :" (ancien format) soit "NOM :" (nouveau format)
+                if " :" in ligne and "IA  :" not in ligne and "---" not in ligne and "=" not in ligne:
+                    try:
+                        contenu = ligne.split(" :")[1].strip()
+                        historique.append({"role": "user", "content": contenu})
+                    except: pass
                 elif "IA  :" in ligne:
                     historique.append({"role": "assistant", "content": ligne.split("IA  :")[1].strip()})
     return historique
@@ -52,19 +56,24 @@ def charger_historique_utilisateur(user):
 def sauvegarder_message(user, texte, reponse):
     horaire = datetime.now().strftime("%H:%M")
     date_jour = datetime.now().strftime("%d-%m-%Y")
+    pseudo_majuscule = user.upper()
     
     # 1. ADMIN (Par Date)
     chemin_admin = f"data/{date_jour}/{user.lower()}"
     os.makedirs(chemin_admin, exist_ok=True)
     with open(f"{chemin_admin}/conversation.txt", "a", encoding="utf-8") as f:
-        f.write(f"[{horaire}] LUI : {texte}\n[{horaire}] IA  : {reponse}\n" + "\n" + "="*40 + "\n\n")
+        f.write(f"[{horaire}] {pseudo_majuscule} : {texte}\n")
+        f.write(f"[{horaire}] IA  : {reponse}\n")
+        f.write("\n" + "="*40 + "\n\n")
     
     # 2. PERSO (Historique global)
     chemin_perso = f"user_data/{user.lower()}"
     os.makedirs(chemin_perso, exist_ok=True)
     with open(f"{chemin_perso}/history.txt", "a", encoding="utf-8") as f:
         f.write(f"--- Discussion du {date_jour} ({horaire}) ---\n")
-        f.write(f"LUI : {texte}\nIA  : {reponse}\n" + "-"*30 + "\n\n")
+        f.write(f"{pseudo_majuscule} : {texte}\n")
+        f.write(f"IA  : {reponse}\n")
+        f.write("-" * 30 + "\n\n")
 
 # ======================================================
 # 🧠 IA LOGIQUE
@@ -81,12 +90,13 @@ def generer_reponse(prompt):
     except: return "Bug réseau..."
 
 # ======================================================
-# 🎨 FONCTION D'AFFICHAGE COULEUR (ADMIN)
+# 🎨 AFFICHAGE COULEUR (ADMIN)
 # ======================================================
 def afficher_texte_colore(texte):
     lignes = texte.split("\n")
     for ligne in lignes:
-        if "LUI :" in ligne:
+        # Si la ligne contient " :" mais n'est pas l'IA, c'est l'utilisateur (on met en bleu)
+        if " :" in ligne and "IA  :" not in ligne and "---" not in ligne and "=" not in ligne:
             st.markdown(f"<span style='color:#3498db'><b>{ligne}</b></span>", unsafe_allow_html=True)
         elif "IA  :" in ligne:
             st.markdown(f"<span style='color:#e67e22'>{ligne}</span>", unsafe_allow_html=True)
@@ -127,7 +137,7 @@ elif st.session_state.page == "login":
 
 elif st.session_state.page == "chat":
     st.title(f"🤖 Discussion")
-    st.sidebar.write(f"Compte : **{st.session_state.username}**")
+    st.sidebar.write(f"Connecté : **{st.session_state.username}**")
     st.session_state.humeur = st.sidebar.selectbox("Mood", ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"])
     
     for m in st.session_state.messages:
@@ -147,7 +157,7 @@ elif st.session_state.page == "chat":
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN (AVEC COULEURS)
+# 🔐 ADMIN (DYNAMIQUE)
 # ======================================================
 elif st.session_state.page == "admin":
     st.title("🔐 Panneau Admin")
@@ -160,7 +170,7 @@ elif st.session_state.page == "admin":
                     st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
 
         with t2:
-            if st.button("🗑️ Vider l'historique"):
+            if st.button("🗑️ Tout supprimer"):
                 for folder in ["data", "user_data"]:
                     if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder)
                 st.rerun()
@@ -169,30 +179,25 @@ elif st.session_state.page == "admin":
                 for d in dates:
                     with st.expander(f"📅 Date : {d}"):
                         for u in os.listdir(f"data/{d}"):
-                            st.write(f"**Utilisateur : {u.upper()}**")
-                            conv_path = f"data/{d}/{u}/conversation.txt"
-                            if os.path.exists(conv_path):
-                                with open(conv_path, "r", encoding="utf-8") as f:
+                            st.write(f"**Archive de {u.upper()}**")
+                            path = f"data/{d}/{u}/conversation.txt"
+                            if os.path.exists(path):
+                                with open(path, "r", encoding="utf-8") as f:
                                     afficher_texte_colore(f.read())
                             st.divider()
         
         with t3:
-            st.subheader("📥 Exportation & Lecture")
             if os.path.exists("user_data"):
                 utilisateurs = sorted([u for u in os.listdir("user_data") if os.path.isdir(f"user_data/{u}")])
                 if utilisateurs:
-                    u_select = st.selectbox("Choisir l'utilisateur", utilisateurs)
+                    u_select = st.selectbox("Sélectionner l'utilisateur", utilisateurs)
                     hist_path = f"user_data/{u_select}/history.txt"
-                    
                     if os.path.exists(hist_path):
                         with open(hist_path, "r", encoding="utf-8") as f:
                             data_all = f.read()
-                        
-                        st.download_button(label=f"💾 Télécharger {u_select.upper()}", data=data_all, file_name=f"archive_{u_select}.txt")
+                        st.download_button(label=f"💾 Télécharger l'historique de {u_select.upper()}", data=data_all, file_name=f"historique_{u_select}.txt")
                         st.divider()
-                        st.write("**Historique complet :**")
                         afficher_texte_colore(data_all)
-                else:
-                    st.info("Aucun historique.")
+                else: st.info("Aucun historique trouvé.")
 
     if st.button("⬅ Retour"): st.session_state.page = "home"; st.rerun()
