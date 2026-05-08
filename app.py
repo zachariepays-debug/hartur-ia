@@ -61,7 +61,6 @@ def sauvegarder_message(user, texte, reponse):
     chemin_admin = f"data/{date_jour}/{user.lower()}"
     os.makedirs(chemin_admin, exist_ok=True)
     with open(f"{chemin_admin}/conversation.txt", "a", encoding="utf-8") as f:
-        # On utilise un délimiteur spécial (###) pour pouvoir séparer les blocs facilement au tri
         f.write(f"###\n[{horaire}] {pseudo} : {texte}\n[{horaire}] IA  : {reponse}\n")
     
     # 2. PERSO (Historique global)
@@ -74,9 +73,7 @@ def sauvegarder_message(user, texte, reponse):
 # 🎨 AFFICHAGE COULEUR ET TRI INVERSÉ (ADMIN)
 # ======================================================
 def afficher_texte_admin_inverse(texte):
-    # On découpe le texte par blocs de messages (séparés par ###)
     blocs = texte.split("###")
-    # On enlève les blocs vides et on inverse l'ordre (le dernier arrivé en premier)
     blocs_valides = [b.strip() for b in blocs if b.strip()]
     blocs_inverses = blocs_valides[::-1] 
 
@@ -156,17 +153,18 @@ elif st.session_state.page == "chat":
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN (TRIÉ DU PLUS RÉCENT AU PLUS ANCIEN)
+# 🔐 ADMIN
 # ======================================================
 elif st.session_state.page == "admin":
-    st.title("🔐 Panneau Admin (Nouveautés en haut)")
+    st.title("🔐 Panneau Admin")
     if st.text_input("Mot de passe", type="password") == "babar":
         t1, t2, t3 = st.tabs(["👤 Comptes", "📅 Par Date", "📂 Par Utilisateur"])
         
         with t1:
             for f in os.listdir("accounts"):
-                with open(f"accounts/{f}", "r", encoding="utf-8") as file:
-                    st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
+                if f.endswith(".txt"):
+                    with open(f"accounts/{f}", "r", encoding="utf-8") as file:
+                        st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
 
         with t2:
             if st.button("🗑️ Vider l'historique"):
