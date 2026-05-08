@@ -4,15 +4,15 @@ import requests
 from datetime import datetime
 
 # ======================================================
-# ⚙️ CONFIGURATION DU SITE
+# ⚙️ CONFIGURATION ET SECRETS
 # ======================================================
 st.set_page_config(page_title="Hartur IA", page_icon="🤖", layout="wide")
 
-# Récupération de ta clé Mistral dans les Secrets de Streamlit
+# Récupération de ta clé Mistral
 api_key = st.secrets.get("MISTRAL_KEY")
 
 # ======================================================
-# 💾 INITIALISATION DES VARIABLES (SESSION STATE)
+# 💾 GESTION DE LA SESSION (SESSION STATE)
 # ======================================================
 if "page" not in st.session_state: st.session_state.page = "home"
 if "logged_in" not in st.session_state: st.session_state.logged_in = False
@@ -21,7 +21,7 @@ if "messages" not in st.session_state: st.session_state.messages = []
 if "humeur" not in st.session_state: st.session_state.humeur = "Cool"
 
 # ======================================================
-# 📁 SYSTÈME DE FICHIERS (COMPTES & LOGS)
+# 📁 SYSTÈME DE FICHIERS (COMPTES ET LOGS)
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
 os.makedirs("data", exist_ok=True)
@@ -40,33 +40,30 @@ def login_account(user, pwd):
         return f.read().strip() == pwd
 
 def sauvegarder_message_local(user, texte, reponse):
-    # Dossier par date : data/08-05-2026/
+    # CRÉATION D'UN SEUL FICHIER PAR DATE (ex: data/08-05-2026.txt)
     date_jour = datetime.now().strftime("%d-%m-%Y")
-    chemin_dossier = f"data/{date_jour}"
-    os.makedirs(chemin_dossier, exist_ok=True)
-    
-    # Fichier par utilisateur : data/08-05-2026/pseudo.txt
-    chemin_fichier = f"{chemin_dossier}/{user.lower()}.txt"
+    chemin_fichier = f"data/{date_jour}.txt"
     horaire = datetime.now().strftime("%H:%M")
     
     with open(chemin_fichier, "a", encoding="utf-8") as f:
-        f.write(f"[{horaire}] LUI: {texte}\n")
-        f.write(f"[{horaire}] IA: {reponse}\n")
-        f.write("-" * 40 + "\n")
+        f.write(f"--- UTILISATEUR : {user.upper()} ({horaire}) ---\n")
+        f.write(f"LUI : {texte}\n")
+        f.write(f"IA  : {reponse}\n")
+        f.write("-" * 50 + "\n\n")
 
 # ======================================================
-# 🧠 INTELLIGENCE ARTIFICIELLE (MISTRAL)
+# 🧠 INTELLIGENCE ARTIFICIELLE (FLUIDE)
 # ======================================================
 def generer_reponse(prompt):
     if not api_key:
-        return "⚠️ Erreur : Clé Mistral non configurée dans les Secrets."
+        return "⚠️ Erreur : Clé Mistral manquante."
 
     instructions = {
-        "Cool": "Tu es Hartur, un ado cool. Réponds directement, sans listes, sois bref et tutoie.",
-        "Drôle": "Réponds avec beaucoup d'humour et des emojis, sois très vivant.",
-        "Sérieux": "Réponds de manière pro et très courte.",
-        "Sarcastique": "Sois moqueur et ironique dans tes réponses.",
-        "Raisonnement complexe": "Réponds intelligemment mais reste fluide, pas de format scolaire."
+        "Cool": "Tu es Hartur, un ado cool. Réponds directement, sans listes, tutoie l'utilisateur.",
+        "Drôle": "Sois très drôle, fais des blagues et utilise des emojis.",
+        "Sérieux": "Réponds de façon brève, précise et professionnelle.",
+        "Sarcastique": "Sois ironique et un peu piquant dans tes réponses.",
+        "Raisonnement complexe": "Réponds avec intelligence mais reste fluide, pas de formatage rigide."
     }
     
     url = "https://api.mistral.ai/v1/chat/completions"
@@ -83,7 +80,7 @@ def generer_reponse(prompt):
         response = requests.post(url, headers=headers, json=data, timeout=12)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Désolé, petit souci technique. Recommence ?"
+        return "Petit souci technique, on peut reprendre ?"
 
 # ======================================================
 # 🏠 NAVIGATION ET BOUTON ADMIN
@@ -94,61 +91,60 @@ with col2:
         st.session_state.page = "admin"
         st.rerun()
 
-# --- ACCUEIL ---
+# --- PAGE D'ACCUEIL ---
 if st.session_state.page == "home":
     st.title("🤖 Hartur IA")
-    st.write("Bienvenue sur ton IA perso.")
     c1, c2 = st.columns(2)
     with c1:
         if st.button("🔑 Connexion"): st.session_state.page = "login"; st.rerun()
     with c2:
         if st.button("🆕 Créer un compte"): st.session_state.page = "signup"; st.rerun()
 
-# --- CRÉATION DE COMPTE ---
+# --- PAGE SIGNUP ---
 elif st.session_state.page == "signup":
-    st.subheader("🆕 Création de compte")
-    u = st.text_input("Choisis un pseudo")
-    p = st.text_input("Choisis un mot de passe", type="password")
-    if st.button("S'enregistrer"):
+    st.subheader("🆕 Inscription")
+    u = st.text_input("Identifiant")
+    p = st.text_input("Mot de passe", type="password")
+    if st.button("Valider l'inscription"):
         if u and p:
             if create_account(u, p):
-                st.success("Compte créé ! Tu peux te connecter.")
+                st.success("Compte créé avec succès !")
                 st.session_state.page = "login"; st.rerun()
-            else: st.error("Ce pseudo existe déjà.")
-    if st.button("Retour"): st.session_state.page = "home"; st.rerun()
+            else: st.error("Ce pseudo est déjà pris.")
 
-# --- CONNEXION ---
+# --- PAGE LOGIN ---
 elif st.session_state.page == "login":
     st.subheader("🔑 Connexion")
     u = st.text_input("Pseudo")
-    p = st.text_input("Mot de passe", type="password")
-    if st.button("Entrer"):
+    p = st.text_input("Pass", type="password")
+    if st.button("Se connecter"):
         if login_account(u, p):
             st.session_state.logged_in = True
             st.session_state.username = u
             st.session_state.page = "chat"; st.rerun()
-        else: st.error("Pseudo ou mot de passe faux.")
-    if st.button("Retour"): st.session_state.page = "home"; st.rerun()
+        else: st.error("Identifiants incorrects.")
 
-# --- ZONE DE CHAT ---
+# --- PAGE CHAT ---
 elif st.session_state.page == "chat":
-    st.title(f"🤖 Discussion avec Hartur")
-    st.sidebar.write(f"Connecté en tant que : **{st.session_state.username}**")
-    st.session_state.humeur = st.sidebar.selectbox("Humeur de Hartur", ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"])
+    st.title(f"🤖 Chat avec Hartur")
+    st.sidebar.write(f"Utilisateur : **{st.session_state.username}**")
+    st.session_state.humeur = st.sidebar.selectbox("Mode de l'IA", ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"])
     
+    # Affichage de l'historique de la session
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    prompt = st.chat_input("Dis quelque chose...")
+    prompt = st.chat_input("Écris ici...")
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"): st.markdown(prompt)
 
         reponse = generer_reponse(prompt)
+        
         st.session_state.messages.append({"role": "assistant", "content": reponse})
         with st.chat_message("assistant"): st.markdown(reponse)
         
-        # Sauvegarde dans le fichier texte local
+        # Sauvegarde automatique dans le fichier texte journalier
         sauvegarder_message_local(st.session_state.username, prompt, reponse)
 
     if st.sidebar.button("Déconnexion"):
@@ -157,44 +153,34 @@ elif st.session_state.page == "chat":
         st.session_state.page = "home"; st.rerun()
 
 # ======================================================
-# 🔐 PANNEAU ADMIN (COMPTES + CONVERSATIONS)
+# 🔐 PANNEAU ADMIN (TOUT SUR UN FICHIER PAR DATE)
 # ======================================================
 elif st.session_state.page == "admin":
     st.title("🔐 Administration")
     if st.text_input("Mot de passe Admin", type="password") == "babar":
-        st.success("Accès Maître autorisé")
         
-        t1, t2 = st.tabs(["👤 Liste des Comptes", "💬 Historique des Chats"])
+        tab1, tab2 = st.tabs(["👤 Comptes Utilisateurs", "💬 Conversations par Jour"])
 
-        with t1:
-            st.subheader("Identifiants & Mots de passe")
+        with tab1:
+            st.subheader("Liste des comptes")
             for f in os.listdir("accounts"):
                 if f.endswith(".txt"):
                     with open(f"accounts/{f}", "r", encoding="utf-8") as file:
-                        st.write(f"👤 **User :** `{f.replace('.txt', '')}` | 🔑 **MDP :** `{file.read()}`")
+                        st.write(f"👤 **{f.replace('.txt', '')}** | MDP: `{file.read()}`")
 
-        with t2:
-            st.subheader("Conversations archivées")
-            # Gestion des dates et des fichiers orphelins (teste, san...)
-            elements = os.listdir("data")
-            dossiers = sorted([e for e in elements if os.path.isdir(f"data/{e}")], reverse=True)
-            fichiers_seuls = [e for e in elements if os.path.isfile(f"data/{e}") and e.endswith(".txt")]
-
-            if dossiers:
-                for d in dossiers:
-                    with st.expander(f"📅 Date : {d}"):
-                        for user_txt in os.listdir(f"data/{d}"):
-                            st.markdown(f"**👤 Utilisateur : {user_txt.replace('.txt', '')}**")
-                            with open(f"data/{d}/{user_txt}", "r", encoding="utf-8") as f:
-                                st.text(f.read())
-                            st.divider()
+        with tab2:
+            st.subheader("Fichiers de logs journaliers")
+            # On liste les fichiers .txt dans data/
+            fichiers = sorted([f for f in os.listdir("data") if f.endswith(".txt")], reverse=True)
             
-            if fichiers_seuls:
-                st.markdown("### 🗄️ Anciens fichiers (Hors date)")
-                for f in fichiers_seuls:
-                    with st.expander(f"👤 {f.replace('.txt', '')}"):
+            if not fichiers:
+                st.info("Aucune conversation enregistrée.")
+            else:
+                for f in fichiers:
+                    # Chaque fichier (ex: 08-05-2026.txt) devient un menu déroulant
+                    with st.expander(f"📅 Archive : {f.replace('.txt', '')}"):
                         with open(f"data/{f}", "r", encoding="utf-8") as file:
                             st.text(file.read())
 
-    if st.button("⬅ Quitter Admin"):
+    if st.button("⬅ Retour"):
         st.session_state.page = "home"; st.rerun()
