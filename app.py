@@ -56,6 +56,34 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
+# 💾 CHAT SAVE / LOAD (🔥 AJOUT IMPORTANT)
+# ======================================================
+def get_user_file(user):
+    os.makedirs(f"data/{user}", exist_ok=True)
+    return f"data/{user}/chat.txt"
+
+def save_message(user, role, content):
+    file = get_user_file(user)
+    with open(file, "a", encoding="utf-8") as f:
+        f.write(f"{role.upper()}:{content}\n")
+
+def load_messages(user):
+    file = get_user_file(user)
+    if not os.path.exists(file):
+        return []
+
+    messages = []
+    with open(file, "r", encoding="utf-8") as f:
+        for line in f:
+            if ":" in line:
+                role, content = line.split(":", 1)
+                messages.append({
+                    "role": role.lower(),
+                    "content": content.strip()
+                })
+    return messages
+
+# ======================================================
 # 🔐 ADMIN BOUTON
 # ======================================================
 col1, col2 = st.columns([9, 1])
@@ -130,6 +158,10 @@ if st.session_state.page == "login":
             st.session_state.logged_in = True
             st.session_state.username = u
             st.session_state.page = "chat"
+
+            # 🔥 CHARGEMENT HISTORIQUE
+            st.session_state.messages = load_messages(u)
+
             st.rerun()
 
         else:
@@ -174,7 +206,6 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     st.sidebar.success(f"👤 {st.session_state.username}")
 
-    # 🎭 IA SETTINGS
     st.sidebar.subheader("🎭 IA Settings")
 
     st.session_state.humeur = st.sidebar.selectbox(
@@ -184,7 +215,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     st.sidebar.write(f"Mode : {st.session_state.humeur}")
 
-    # 💬 CHAT
+    # 💬 AFFICHAGE CHAT
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
@@ -193,17 +224,21 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     if prompt:
 
+        # USER
         st.session_state.messages.append({
             "role": "user",
             "content": prompt
         })
+        save_message(st.session_state.username, "user", prompt)
 
+        # IA
         reponse = generer_reponse(prompt)
 
         st.session_state.messages.append({
             "role": "assistant",
             "content": reponse
         })
+        save_message(st.session_state.username, "assistant", reponse)
 
         st.rerun()
 
@@ -214,7 +249,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN DASHBOARD + CONVERSATIONS CLIQUABLES
+# 🔐 ADMIN DASHBOARD
 # ======================================================
 if st.session_state.page == "admin":
 
@@ -233,7 +268,6 @@ if st.session_state.page == "admin":
         ["📁 Sauvegardes", "👤 Comptes", "💬 Conversations"]
     )
 
-    # 📁 COMPTES
     if menu == "📁 Sauvegardes":
 
         st.subheader("📁 Comptes")
@@ -243,7 +277,6 @@ if st.session_state.page == "admin":
                 with open(f"accounts/{f}", "r") as file:
                     st.text(file.read())
 
-    # 👤 USERS
     elif menu == "👤 Comptes":
 
         st.subheader("👤 Utilisateurs")
@@ -251,7 +284,6 @@ if st.session_state.page == "admin":
         for f in os.listdir("accounts"):
             st.write("✔", f.replace(".txt", ""))
 
-    # 💬 CONVERSATIONS CLIQUABLES
     elif menu == "💬 Conversations":
 
         st.subheader("💬 Conversations")
