@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-import uuid
 
 # ======================================================
 # ⚙️ CONFIG
@@ -12,7 +11,7 @@ st.set_page_config(
 )
 
 # ======================================================
-# 💾 SESSION
+# 💾 SESSION STATE
 # ======================================================
 if "page" not in st.session_state:
     st.session_state.page = "home"
@@ -27,22 +26,19 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "role" not in st.session_state:
-    st.session_state.role = "user"   # 👈 user ou admin
+    st.session_state.role = "user"
 
 if "admin_popup" not in st.session_state:
     st.session_state.admin_popup = False
 
+# 🔒 IA VERROUILLÉE (IMPORTANT)
 if "nom_ia" not in st.session_state:
     st.session_state.nom_ia = "Hartur"
-
-if "humeur" not in st.session_state:
-    st.session_state.humeur = "Cool"
 
 # ======================================================
 # 📁 USERS
 # ======================================================
 os.makedirs("accounts", exist_ok=True)
-os.makedirs("data", exist_ok=True)
 
 def create_account(user, pwd):
     file = f"accounts/{user.lower()}.txt"
@@ -60,7 +56,7 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🔐 BOUTON ADMIN (VISIBLE TOUJOURS)
+# 🔐 ADMIN BUTTON (TOUJOURS VISIBLE)
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
@@ -69,13 +65,13 @@ with col2:
         st.session_state.admin_popup = True
 
 # ======================================================
-# 🔐 POPUP ADMIN (SÉPARÉ DU USER)
+# 🔐 ADMIN POPUP (CORRIGÉ)
 # ======================================================
 if st.session_state.admin_popup:
 
-    st.warning("🔐 Connexion Admin")
+    st.warning("🔐 Accès Admin")
 
-    mdp = st.text_input("Mot de passe", type="password")
+    mdp = st.text_input("Mot de passe admin", type="password")
 
     c1, c2 = st.columns(2)
 
@@ -101,7 +97,7 @@ if st.session_state.admin_popup:
     st.stop()
 
 # ======================================================
-# 🏠 HOME
+# 🏠 HOME PAGE
 # ======================================================
 if st.session_state.page == "home":
 
@@ -110,8 +106,8 @@ if st.session_state.page == "home":
     st.info("""
 ✔ IA intelligente  
 ✔ Comptes utilisateurs  
-✔ Chat avec mémoire  
-✔ Mode admin séparé  
+✔ Chat sauvegardé  
+✔ Mode admin sécurisé  
 """)
 
     c1, c2 = st.columns(2)
@@ -145,7 +141,7 @@ if st.session_state.page == "signup":
             st.session_state.page = "login"
             st.rerun()
         else:
-            st.error("Déjà utilisé")
+            st.error("Identifiant déjà utilisé")
 
     if st.button("Retour"):
         st.session_state.page = "home"
@@ -187,13 +183,13 @@ if st.session_state.page == "login":
 # ======================================================
 if st.session_state.page == "chat" and st.session_state.logged_in:
 
+    # 🔒 NOM IA VERROUILLÉ (NON MODIFIABLE)
     st.title(f"🤖 {st.session_state.nom_ia}")
 
     st.sidebar.success(f"👤 {st.session_state.username}")
-    st.sidebar.write(f"🎭 Humeur : {st.session_state.humeur}")
 
     # ==================================================
-    # 🔓 ADMIN PANEL (UNIQUEMENT SI ROLE ADMIN)
+    # 🔐 ADMIN PANEL
     # ==================================================
     if st.session_state.role == "admin":
 
@@ -208,21 +204,6 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         if st.button("Quitter admin"):
             st.session_state.role = "user"
             st.rerun()
-
-    # ==================================================
-    # ⚙️ PERSONNALISATION IA
-    # ==================================================
-    st.sidebar.subheader("⚙️ IA")
-
-    st.session_state.nom_ia = st.sidebar.text_input(
-        "Nom IA",
-        st.session_state.nom_ia
-    )
-
-    st.session_state.humeur = st.sidebar.selectbox(
-        "Humeur",
-        ["Cool", "Drôle", "Gentil", "Sarcastique"]
-    )
 
     # ==================================================
     # 💬 CHAT
@@ -240,7 +221,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
             "content": prompt
         })
 
-        reponse = f"({st.session_state.nom_ia}) répond en mode {st.session_state.humeur}"
+        reponse = f"{st.session_state.nom_ia} répond 🤖"
 
         st.session_state.messages.append({
             "role": "assistant",
