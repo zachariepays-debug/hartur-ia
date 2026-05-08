@@ -142,36 +142,34 @@ if st.session_state.page == "login":
 # ======================================================
 def generer_reponse(prompt):
 
-    prompt = prompt.lower().strip()
+    if prompt is None or prompt.strip() == "":
+        return "⚠️ Message vide reçu."
+
+    prompt_clean = prompt.strip()
 
     if st.session_state.humeur == "Raisonnement complexe":
 
-        return f"""
-🧠 Analyse de la question :
-
-• Question : {prompt}
-• Compréhension du sujet
-• Analyse logique étape par étape
-• Construction de la réponse
-
-👉 Réponse :
-Je traite ta demande : "{prompt}"
-
-➡️ Explication claire et structurée.
-Si tu veux plus de précision, reformule 👍
-"""
+        return (
+            "🧠 Analyse :\n\n"
+            f"• Question : {prompt_clean}\n"
+            "• Compréhension\n"
+            "• Analyse logique\n"
+            "• Réponse structurée\n\n"
+            "👉 Réponse :\n"
+            "Je comprends ta demande et je vais t’aider clairement 👍"
+        )
 
     elif st.session_state.humeur == "Drôle":
-        return f"😄 Tu viens de dire : '{prompt}'… j’avoue c’est stylé 😂"
+        return f"😄 Tu as écrit : « {prompt_clean} » 😂"
 
     elif st.session_state.humeur == "Sérieux":
-        return f"📌 Analyse sérieuse :\n\nTu as demandé : {prompt}\n\n➡️ Je vais t’aider de manière claire et structurée."
+        return f"📌 Réponse :\n\nTu as demandé : {prompt_clean}\n➡️ Je t’aide clairement."
 
     elif st.session_state.humeur == "Sarcastique":
-        return f"🙃 Wow… '{prompt}'… quelle question incroyable franchement."
+        return f"🙃 Sérieusement ? « {prompt_clean} » ?"
 
     else:
-        return f"🤖 {st.session_state.nom_ia} : J’ai bien reçu → '{prompt}' 👍"
+        return f"🤖 {st.session_state.nom_ia} : j’ai reçu → « {prompt_clean} » 👍"
 
 # ======================================================
 # 💬 CHAT
@@ -195,7 +193,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
 
     prompt = st.chat_input("Écris ici...")
 
-    if prompt:
+    if prompt and prompt.strip() != "":
 
         st.session_state.messages.append({
             "role": "user",
@@ -257,9 +255,7 @@ if st.session_state.page == "admin":
 
             for f in os.listdir(f"data/{d}"):
 
-                user = f.replace(".txt", "")
-
-                if st.button(f"👤 {user}"):
+                if st.button(f"👤 {f.replace('.txt','')}"):
                     st.session_state.selected_user = f
 
                 if st.session_state.selected_user == f:
