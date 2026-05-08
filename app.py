@@ -150,3 +150,50 @@ elif st.session_state.page == "chat":
         reponse = generer_reponse(prompt)
         st.session_state.messages.append({"role": "assistant", "content": reponse})
         with st.chat_message("assistant"): st.markdown(reponse)
+        sauvegarder_message(st.session_state.username, prompt, reponse)
+    if st.sidebar.button("Déconnexion"):
+        st.session_state.logged_in, st.session_state.messages, st.session_state.page = False, [], "home"
+        st.rerun()
+
+# ======================================================
+# 🔐 ADMIN (TRIÉ DU PLUS RÉCENT AU PLUS ANCIEN)
+# ======================================================
+elif st.session_state.page == "admin":
+    st.title("🔐 Panneau Admin (Nouveautés en haut)")
+    if st.text_input("Mot de passe", type="password") == "babar":
+        t1, t2, t3 = st.tabs(["👤 Comptes", "📅 Par Date", "📂 Par Utilisateur"])
+        
+        with t1:
+            for f in os.listdir("accounts"):
+                with open(f"accounts/{f}", "r", encoding="utf-8") as file:
+                    st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
+
+        with t2:
+            if st.button("🗑️ Vider l'historique"):
+                for folder in ["data", "user_data"]:
+                    if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder)
+                st.rerun()
+            if os.path.exists("data"):
+                dates = sorted([d for d in os.listdir("data") if os.path.isdir(f"data/{d}")], reverse=True)
+                for d in dates:
+                    with st.expander(f"📅 Date : {d}"):
+                        for u in os.listdir(f"data/{d}"):
+                            st.subheader(f"Archive de {u.upper()}")
+                            path = f"data/{d}/{u}/conversation.txt"
+                            if os.path.exists(path):
+                                with open(path, "r", encoding="utf-8") as f:
+                                    afficher_texte_admin_inverse(f.read())
+        
+        with t3:
+            if os.path.exists("user_data"):
+                utilisateurs = sorted([u for u in os.listdir("user_data") if os.path.isdir(f"user_data/{u}")])
+                if utilisateurs:
+                    u_select = st.selectbox("Choisir l'utilisateur", utilisateurs)
+                    hist_path = f"user_data/{u_select}/history.txt"
+                    if os.path.exists(hist_path):
+                        with open(hist_path, "r", encoding="utf-8") as f:
+                            data_all = f.read()
+                        st.download_button(label=f"💾 Télécharger {u_select.upper()}", data=data_all, file_name=f"archive_{u_select}.txt")
+                        st.divider()
+                        afficher_texte_admin_inverse(data_all)
+    if st.button("⬅ Retour"): st.session_state.page = "home"; st.rerun()
