@@ -1,6 +1,7 @@
 import streamlit as st
 import os
 import random
+import requests
 
 # ======================================================
 # ⚙️ CONFIG
@@ -10,6 +11,11 @@ st.set_page_config(
     page_icon="🤖",
     layout="wide"
 )
+
+# ======================================================
+# 🔑 API KEY
+# ======================================================
+OPENAI_API_KEY = "TA_CLE_API_ICI"
 
 # ======================================================
 # 💾 SESSION STATE
@@ -54,7 +60,7 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🔐 ADMIN BOUTON
+# 🔐 ADMIN
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
@@ -70,12 +76,7 @@ if st.session_state.page == "home":
 
     st.title("🤖 Hartur IA")
 
-    st.info("""
-✔ IA intelligente  
-✔ Comptes utilisateurs  
-✔ Chat sauvegardé  
-✔ Admin dashboard  
-""")
+    st.info("✔ IA intelligente ✔ Chat ✔ Comptes ✔ Admin")
 
     c1, c2 = st.columns(2)
 
@@ -96,8 +97,6 @@ if st.session_state.page == "home":
 # ======================================================
 if st.session_state.page == "signup":
 
-    st.subheader("Créer compte")
-
     u = st.text_input("Identifiant")
     p = st.text_input("Mot de passe", type="password")
 
@@ -107,7 +106,7 @@ if st.session_state.page == "signup":
             st.session_state.page = "login"
             st.rerun()
         else:
-            st.error("Déjà utilisé")
+            st.error("Déjà existant")
 
     st.stop()
 
@@ -116,54 +115,61 @@ if st.session_state.page == "signup":
 # ======================================================
 if st.session_state.page == "login":
 
-    st.subheader("Connexion")
-
     u = st.text_input("Identifiant")
     p = st.text_input("Mot de passe", type="password")
 
     if st.button("Connexion"):
 
         if login_account(u, p):
-
             st.session_state.logged_in = True
             st.session_state.username = u
             st.session_state.page = "chat"
             st.rerun()
-
         else:
             st.error("Erreur login")
 
     st.stop()
 
 # ======================================================
-# 🧠 IA RESPONSE
+# 🧠 IA AVEC API (CORRIGÉE PROPRE)
 # ======================================================
 def generer_reponse(prompt):
 
     prompt = prompt.strip()
 
     if not prompt:
-        return "🤖 Dis-moi quelque chose 🙂"
+        return "Dis-moi quelque chose 🙂"
 
-    p = prompt.lower()
+    url = "https://api.openai.com/v1/chat/completions"
 
-    if "bonjour" in p:
-        return f"🤖 {st.session_state.nom_ia} : Salut 🙂"
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json"
+    }
 
-    if "ça va" in p:
-        return f"🤖 {st.session_state.nom_ia} : Oui ça va 🙂 et toi ?"
+    data = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {
+                "role": "system",
+                "content": "Tu es Hartur, une IA simple, naturelle, utile. Tu réponds clairement sans phrases répétitives ni robotisées."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ],
+        "temperature": 0.8
+    }
 
-    if "qui es tu" in p:
-        return f"🤖 {st.session_state.nom_ia} : Je suis ton assistant IA 🙂"
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        result = response.json()
 
-    base = [
-        "J’ai bien compris 👍",
-        "Ok je vois 🙂",
-        "D’accord 👌",
-        "Je comprends 👍"
-    ]
+        return result["choices"][0]["message"]["content"]
 
-    return f"🤖 {st.session_state.nom_ia} : {random.choice(base)}"
+    except Exception as e:
+        return "Erreur IA : " + str(e)
 
 # ======================================================
 # 💬 CHAT
@@ -203,7 +209,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN
+# 🔐 ADMIN PANEL (FIX BUTTON KEY)
 # ======================================================
 if st.session_state.page == "admin":
 
@@ -212,10 +218,7 @@ if st.session_state.page == "admin":
     mdp = st.text_input("Mot de passe admin", type="password")
 
     if mdp != "babar":
-        st.warning("Accès refusé")
         st.stop()
-
-    st.success("Mode admin activé 🔓")
 
     menu = st.radio(
         "Navigation Admin",
@@ -232,22 +235,16 @@ if st.session_state.page == "admin":
     elif menu == "👤 Comptes":
 
         for f in os.listdir("accounts"):
-            st.write("✔", f.replace(".txt", ""))
+            st.write(f.replace(".txt", ""))
 
     elif menu == "💬 Conversations":
 
-        st.subheader("💬 Conversations")
+        if os.path.exists("data"):
 
-        # 🔥 FIX COMPLET + SAFE
-        data_path = "data"
+            for d in os.listdir("data"):
 
-        if os.path.exists(data_path):
+                chemin_d = os.path.join("data", d)
 
-            for d in os.listdir(data_path):
-
-                chemin_d = os.path.join(data_path, d)
-
-                # ✔ on ignore si ce n'est pas un dossier
                 if not os.path.isdir(chemin_d):
                     continue
 
@@ -255,19 +252,15 @@ if st.session_state.page == "admin":
 
                 for f in os.listdir(chemin_d):
 
-                    user = f.replace(".txt", "")
-
-                    if st.button(f"👤 {user}", key=f"btn_{d}_{f}"):
+                    if st.button(f"👤 {f}", key=f"btn_{d}_{f}"):
 
                         st.session_state.selected_user = f
 
                     if st.session_state.selected_user == f:
 
-                        st.markdown("### 📜 Conversation")
-
                         with open(os.path.join(chemin_d, f), "r") as file:
                             st.text(file.read())
 
-    if st.button("⬅ Retour app"):
+    if st.button("⬅ Retour"):
         st.session_state.page = "home"
         st.rerun()
