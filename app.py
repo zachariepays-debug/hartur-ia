@@ -57,15 +57,22 @@ def sauvegarder_message(user, texte, reponse):
     date_jour = datetime.now().strftime("%d-%m-%Y")
     pseudo = user.upper()
     
+    # 1. ADMIN (Question puis Réponse)
     chemin_date = f"data/{date_jour}"
     os.makedirs(chemin_date, exist_ok=True)
     with open(f"{chemin_date}/global_logs.txt", "a", encoding="utf-8") as f:
-        f.write(f"###\n[{horaire}] {pseudo} : {texte}\n[{horaire}] IA  : {reponse}\n")
+        f.write("###\n")
+        f.write(f"[{horaire}] {pseudo} : {texte}\n") # Question en premier
+        f.write(f"[{horaire}] IA  : {reponse}\n")   # Réponse ensuite
     
+    # 2. PERSO (Question puis Réponse)
     chemin_perso = f"user_data/{user.lower()}"
     os.makedirs(chemin_perso, exist_ok=True)
     with open(f"{chemin_perso}/history.txt", "a", encoding="utf-8") as f:
-        f.write(f"###\n--- Discussion du {date_jour} ({horaire}) ---\n{pseudo} : {texte}\nIA  : {reponse}\n")
+        f.write("###\n")
+        f.write(f"--- Discussion du {date_jour} ({horaire}) ---\n")
+        f.write(f"{pseudo} : {texte}\n") # Question en premier
+        f.write(f"IA  : {reponse}\n")   # Réponse ensuite
 
 # ======================================================
 # 🎨 AFFICHAGE COULEUR ET TRI INVERSÉ (ADMIN)
@@ -73,13 +80,16 @@ def sauvegarder_message(user, texte, reponse):
 def afficher_texte_admin_inverse(texte):
     blocs = texte.split("###")
     blocs_valides = [b.strip() for b in blocs if b.strip()]
+    # On garde le tri inversé : le bloc de conversation le plus récent apparaît en haut
     blocs_inverses = blocs_valides[::-1] 
 
     for bloc in blocs_inverses:
         lignes = bloc.split("\n")
         for ligne in lignes:
+            # Affichage de l'utilisateur en Bleu (Question)
             if " :" in ligne and "IA  :" not in ligne and "---" not in ligne:
                 st.markdown(f"<span style='color:#3498db'><b>{ligne}</b></span>", unsafe_allow_html=True)
+            # Affichage de l'IA en Orange (Réponse)
             elif "IA  :" in ligne:
                 st.markdown(f"<span style='color:#e67e22'>{ligne}</span>", unsafe_allow_html=True)
             else:
@@ -87,18 +97,17 @@ def afficher_texte_admin_inverse(texte):
         st.markdown("<hr style='margin:10px 0; border:0.5px solid #333'>", unsafe_allow_html=True)
 
 # ======================================================
-# 🧠 IA LOGIQUE (PERSONNALITÉ AJUSTÉE)
+# 🧠 IA LOGIQUE
 # ======================================================
 def generer_reponse(prompt):
     if not api_key: return "Clé manquante."
     
-    # Ajustement du ton : "Équilibrée" remplace "Cool" pour un ton un peu plus sérieux
     instructions = {
-        "Équilibrée": "Tu es Hartur. Ton ton est poli, posé et un peu plus sérieux, tout en restant moderne. Évite le langage trop familier mais reste accessible.", 
+        "Équilibrée": "Tu es Hartur. Ton ton est poli, posé et un peu plus sérieux, tout en restant moderne. Évite le langage trop familier.", 
         "Drôle": "Sois amusant et plein d'esprit.", 
-        "Sérieux": "Sois très formel, précis et synthétique.", 
+        "Sérieux": "Sois formel, précis et synthétique.", 
         "Sarcastique": "Utilise l'ironie avec finesse.", 
-        "Raisonnement complexe": "Fournis une analyse structurée et détaillée."
+        "Raisonnement complexe": "Fournis une analyse structurée."
     }
     
     url = "https://api.mistral.ai/v1/chat/completions"
@@ -107,10 +116,10 @@ def generer_reponse(prompt):
     try:
         response = requests.post(url, headers=headers, json=data, timeout=12)
         return response.json()['choices'][0]['message']['content']
-    except: return "Erreur de connexion..."
+    except: return "Erreur réseau..."
 
 # ======================================================
-# 🏠 NAVIGATION ET PAGES
+# 🏠 NAVIGATION
 # ======================================================
 col1, col2 = st.columns([9, 1])
 with col2:
@@ -139,7 +148,7 @@ elif st.session_state.page == "login":
             st.session_state.logged_in, st.session_state.username = True, u
             st.session_state.messages = charger_historique_utilisateur(u)
             st.session_state.page = "chat"; st.rerun()
-        else: st.error("Erreur d'accès.")
+        else: st.error("Accès refusé.")
 
 elif st.session_state.page == "chat":
     st.title(f"🤖 Discussion")
@@ -160,7 +169,7 @@ elif st.session_state.page == "chat":
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN
+# 🔐 ADMIN (ORDRE LOGIQUE : USER PUIS IA)
 # ======================================================
 elif st.session_state.page == "admin":
     st.title("🔐 Panneau Admin")
@@ -174,8 +183,7 @@ elif st.session_state.page == "admin":
                         st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
 
         with t2:
-            st.subheader("Flux d'activité par jour")
-            if st.button("🗑️ Vider tout l'historique"):
+            if st.button("🗑️ Vider l'historique"):
                 for folder in ["data", "user_data"]:
                     if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder)
                 st.rerun()
@@ -192,12 +200,12 @@ elif st.session_state.page == "admin":
             if os.path.exists("user_data"):
                 utilisateurs = sorted([u for u in os.listdir("user_data") if os.path.isdir(f"user_data/{u}")])
                 if utilisateurs:
-                    u_select = st.selectbox("Sélectionner l'utilisateur", utilisateurs)
+                    u_select = st.selectbox("Choisir l'utilisateur", utilisateurs)
                     hist_path = f"user_data/{u_select}/history.txt"
                     if os.path.exists(hist_path):
                         with open(hist_path, "r", encoding="utf-8") as f:
                             data_all = f.read()
-                        st.download_button(label=f"💾 Exporter l'historique de {u_select.upper()}", data=data_all, file_name=f"archive_{u_select}.txt")
+                        st.download_button(label=f"💾 Exporter {u_select.upper()}", data=data_all, file_name=f"archive_{u_select}.txt")
                         st.divider()
                         afficher_texte_admin_inverse(data_all)
     if st.button("⬅ Retour"): st.session_state.page = "home"; st.rerun()
