@@ -6,11 +6,10 @@ from firebase_admin import credentials, firestore
 from datetime import datetime
 
 # ======================================================
-# ⚙️ CONFIGURATION ET CONNEXION
+# ⚙️ CONFIGURATION
 # ======================================================
 st.set_page_config(page_title="Hartur IA", page_icon="🤖", layout="wide")
 
-# --- Initialisation Firebase ---
 if not firebase_admin._apps:
     try:
         cred = credentials.Certificate('arthure-ia-firebase-adminsdk-fbsvc-8c2d7737ee.json')
@@ -19,200 +18,115 @@ if not firebase_admin._apps:
         st.error(f"Erreur Firebase : {e}")
 
 db = firestore.client()
-
-# --- Récupération Clé Mistral ---
 api_key = st.secrets.get("MISTRAL_KEY")
 
 # ======================================================
 # 💾 SESSION STATE
 # ======================================================
-states = {
-    "page": "home",
-    "logged_in": False,
-    "username": None,
-    "messages": [],
-    "nom_ia": "Hartur",
-    "humeur": "Cool",
-    "selected_user": None
-}
-for key, value in states.items():
-    if key not in st.session_state:
-        st.session_state[key] = value
+if "page" not in st.session_state: st.session_state.page = "home"
+if "logged_in" not in st.session_state: st.session_state.logged_in = False
+if "username" not in st.session_state: st.session_state.username = None
+if "messages" not in st.session_state: st.session_state.messages = []
+if "humeur" not in st.session_state: st.session_state.humeur = "Cool"
 
 # ======================================================
-# 📁 GESTION DES COMPTES (Local)
-# ======================================================
-os.makedirs("accounts", exist_ok=True)
-
-def create_account(user, pwd):
-    file = f"accounts/{user.lower()}.txt"
-    if os.path.exists(file): return False
-    with open(file, "w") as f: f.write(pwd)
-    return True
-
-def login_account(user, pwd):
-    file = f"accounts/{user.lower()}.txt"
-    if not os.path.exists(file): return False
-    with open(file, "r") as f: return f.read() == pwd
-
-# ======================================================
-# 🧠 LOGIQUE IA (MISTRAL)
+# 🧠 IA LOGIQUE (FLUIDITÉ AMÉLIORÉE)
 # ======================================================
 def generer_reponse(prompt):
     if not api_key:
-        return "⚠️ Erreur : Clé Mistral manquante dans les Secrets."
+        return "Clé API manquante."
 
-    # Adaptation du comportement selon l'humeur choisie
+    # On définit des instructions qui privilégient la discussion directe
     instructions = {
-        "Cool": "Tu es Hartur, un ado cool et détendu. Tutoie l'utilisateur.",
-        "Drôle": "Tu es un humoriste qui fait beaucoup de blagues et utilise des emojis.",
-        "Sérieux": "Tu es un expert formel, très précis et professionnel.",
-        "Sarcastique": "Tu es très sarcastique, tu te moques gentiment de l'utilisateur.",
-        "Raisonnement complexe": "Analyse la question étape par étape avec une logique scientifique."
+        "Cool": "Tu es Hartur, un ado cool. Parle normalement, sans faire de listes, sois bref et amical. Tutoie.",
+        "Drôle": "Réponds avec humour et des emojis, comme si on était sur WhatsApp.",
+        "Sérieux": "Réponds de manière concise et directe, sans analyse inutile.",
+        "Sarcastique": "Sois ironique et un peu moqueur, mais reste fluide.",
+        "Raisonnement complexe": "Explique simplement mais avec intelligence, sans structure rigide."
     }
     
-    system_prompt = instructions.get(st.session_state.humeur, "Tu es Hartur.")
+    system_content = instructions.get(st.session_state.humeur, "Tu es Hartur, réponds de façon fluide.")
 
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
     data = {
         "model": "open-mistral-7b",
         "messages": [
-            {"role": "system", "content": system_prompt},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": prompt}
-        ]
+        ],
+        "temperature": 0.7  # Ajoute un peu de créativité pour plus de naturel
     }
+    
     try:
         response = requests.post(url, headers=headers, json=data, timeout=10)
+        # On renvoie uniquement le texte de la réponse, sans fioritures
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Désolé, Hartur a un petit bug de connexion là... 🔌"
+        return "Désolé, j'ai eu un bug réseau. On reprend ?"
 
 # ======================================================
-# 🏠 NAVIGATION / UI
+# 🏠 NAVIGATION
 # ======================================================
-col1, col2 = st.columns([9, 1])
-with col2:
-    if st.button("🔐 Admin"):
-        st.session_state.page = "admin"
-        st.rerun()
-
-# --- PAGES ---
 if st.session_state.page == "home":
     st.title("🤖 Hartur IA")
-    st.info("✔ IA Intelligente | ✔ Comptes Sécurisés | ✔ Admin Dashboard")
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("🔑 Connexion"):
-            st.session_state.page = "login"
-            st.rerun()
+        if st.button("🔑 Connexion"): st.session_state.page = "login"; st.rerun()
     with c2:
-        if st.button("🆕 Créer compte"):
-            st.session_state.page = "signup"
-            st.rerun()
-
-elif st.session_state.page == "signup":
-    st.subheader("🆕 Créer un compte")
-    u = st.text_input("Identifiant")
-    p = st.text_input("Mot de passe", type="password")
-    if st.button("Valider"):
-        if create_account(u, p):
-            st.success("Compte créé ! Connecte-toi.")
-            st.session_state.page = "login"
-            st.rerun()
-        else: st.error("Nom déjà pris.")
-    if st.button("Retour"):
-        st.session_state.page = "home"
-        st.rerun()
+        if st.button("🔐 Admin"): st.session_state.page = "admin"; st.rerun()
 
 elif st.session_state.page == "login":
-    st.subheader("🔑 Connexion")
-    u = st.text_input("Identifiant")
-    p = st.text_input("Mot de passe", type="password")
-    if st.button("Entrer"):
-        if login_account(u, p):
+    u = st.text_input("Pseudo")
+    if st.button("Lancer le chat"):
+        if u:
             st.session_state.logged_in = True
             st.session_state.username = u
             st.session_state.page = "chat"
             st.rerun()
-        else: st.error("Identifiants incorrects.")
-    if st.button("Retour"):
-        st.session_state.page = "home"
-        st.rerun()
 
 # ======================================================
-# 💬 CHAT (Avec sauvegarde Firebase)
+# 💬 CHAT (FLUIDE)
 # ======================================================
-elif st.session_state.page == "chat" and st.session_state.logged_in:
-    st.title(f"🤖 {st.session_state.nom_ia}")
-    st.sidebar.success(f"👤 {st.session_state.username}")
+elif st.session_state.page == "chat":
+    st.title(f"🤖 Hartur")
     
-    # Paramètres IA
-    st.session_state.humeur = st.sidebar.selectbox(
-        "Humeur IA", ["Cool", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"]
-    )
-    
-    # Affichage historique
+    st.sidebar.selectbox("Ton mood :", ["Cool", "Drôle", "Sérieux", "Sarcastique"], key="humeur")
+
     for m in st.session_state.messages:
         with st.chat_message(m["role"]): st.markdown(m["content"])
 
-    prompt = st.chat_input("Dis un truc à Hartur...")
-    if prompt:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
+    user_input = st.chat_input("Dis-moi...")
+    if user_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.chat_message("user"): st.markdown(user_input)
 
-        reponse = generer_reponse(prompt)
+        # Ici, l'IA génère la réponse directe sans passer par l'ancien système de questions
+        reponse = generer_reponse(user_input)
         
         st.session_state.messages.append({"role": "assistant", "content": reponse})
         with st.chat_message("assistant"): st.markdown(reponse)
 
-        # 💾 SAUVEGARDE FIREBASE
+        # Sauvegarde silencieuse Firebase
         try:
             db.collection("discussions").add({
                 "nom": st.session_state.username,
-                "texte": prompt,
+                "texte": user_input,
                 "reponse": reponse,
-                "humeur": st.session_state.humeur,
                 "date": datetime.utcnow()
             })
         except: pass
 
-    if st.sidebar.button("Déconnexion"):
-        st.session_state.logged_in = False
-        st.session_state.messages = []
-        st.session_state.page = "home"
-        st.rerun()
-
 # ======================================================
-# 🔐 ADMIN DASHBOARD (Lecture Firebase)
+# 🔐 ADMIN
 # ======================================================
 elif st.session_state.page == "admin":
-    st.title("🔐 Panneau de contrôle")
-    mdp = st.text_input("Code secret", type="password")
-    
-    if mdp == "babar":
-        menu = st.radio("Voir :", ["👤 Comptes Locaux", "💬 Conversations Firebase"])
-        
-        if menu == "👤 Comptes Locaux":
-            for f in os.listdir("accounts"):
-                st.write(f"✅ {f.replace('.txt', '')}")
-        
-        else:
-            docs = list(db.collection("discussions").order_by("date", direction=firestore.Query.DESCENDING).stream())
-            convs = {}
-            for d in docs:
-                data = d.to_dict()
-                u = data.get("nom", "Anonyme")
-                if u not in convs: convs[u] = []
-                convs[u].append(data)
-            
-            for user, msgs in convs.items():
-                with st.expander(f"👤 {user}"):
-                    for m in msgs:
-                        st.write(f"**Lui:** {m.get('texte')}")
-                        st.write(f"**Hartur ({m.get('humeur')}):** {m.get('reponse')}")
-                        st.divider()
-
-    if st.button("⬅ Retour"):
-        st.session_state.page = "home"
-        st.rerun()
+    st.title("🔐 Admin")
+    if st.text_input("Pass", type="password") == "babar":
+        docs = db.collection("discussions").order_by("date", direction=firestore.Query.DESCENDING).limit(20).stream()
+        for d in docs:
+            msg = d.to_dict()
+            st.write(f"**{msg.get('nom')}**: {msg.get('texte')}")
+            st.write(f"🤖: {msg.get('reponse')}")
+            st.divider()
+    if st.button("Retour"): st.session_state.page = "home"; st.rerun()
