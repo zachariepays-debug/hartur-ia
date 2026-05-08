@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import google.generativeai as genai
 
 # ======================================================
 # ⚙️ CONFIG
@@ -9,6 +10,12 @@ st.set_page_config(
     page_icon="🤖",
     layout="wide"
 )
+
+# ======================================================
+# 🧠 IA (GEMINI CONFIG)
+# ======================================================
+genai.configure(api_key="TON_API_KEY_ICI")
+model = genai.GenerativeModel("gemini-1.5-flash")
 
 # ======================================================
 # 💾 SESSION STATE
@@ -56,7 +63,7 @@ def login_account(user, pwd):
         return f.read() == pwd
 
 # ======================================================
-# 🔐 ADMIN BOUTON
+# 🔐 ADMIN
 # ======================================================
 col1, col2 = st.columns([9, 1])
 
@@ -72,12 +79,7 @@ if st.session_state.page == "home":
 
     st.title("🤖 Hartur IA")
 
-    st.info("""
-✔ IA intelligente  
-✔ Comptes utilisateurs  
-✔ Chat sauvegardé  
-✔ Admin dashboard  
-""")
+    st.info("✔ IA connectée ✔ Comptes ✔ Chat ✔ Admin")
 
     c1, c2 = st.columns(2)
 
@@ -94,82 +96,19 @@ if st.session_state.page == "home":
     st.stop()
 
 # ======================================================
-# 🆕 SIGNUP
-# ======================================================
-if st.session_state.page == "signup":
-
-    st.subheader("Créer compte")
-
-    u = st.text_input("Identifiant")
-    p = st.text_input("Mot de passe", type="password")
-
-    if st.button("Créer"):
-        if create_account(u, p):
-            st.success("Compte créé")
-            st.session_state.page = "login"
-            st.rerun()
-        else:
-            st.error("Déjà utilisé")
-
-    st.stop()
-
-# ======================================================
-# 🔑 LOGIN
-# ======================================================
-if st.session_state.page == "login":
-
-    st.subheader("Connexion")
-
-    u = st.text_input("Identifiant")
-    p = st.text_input("Mot de passe", type="password")
-
-    if st.button("Connexion"):
-
-        if login_account(u, p):
-
-            st.session_state.logged_in = True
-            st.session_state.username = u
-            st.session_state.page = "chat"
-            st.rerun()
-
-        else:
-            st.error("Erreur login")
-
-    st.stop()
-
-# ======================================================
-# 🧠 IA RESPONSE LOGIC (CORRIGÉE)
+# 🧠 IA RÉELLE (FIX)
 # ======================================================
 def generer_reponse(prompt):
 
     if prompt is None or prompt.strip() == "":
-        return "⚠️ Message vide reçu."
+        return "⚠️ Message vide"
 
-    prompt_clean = prompt.strip()
+    try:
+        response = model.generate_content(prompt)
+        return response.text
 
-    if st.session_state.humeur == "Raisonnement complexe":
-
-        return (
-            "🧠 Analyse :\n\n"
-            f"• Question : {prompt_clean}\n"
-            "• Compréhension\n"
-            "• Analyse logique\n"
-            "• Réponse structurée\n\n"
-            "👉 Réponse :\n"
-            "Je comprends ta demande et je vais t’aider clairement 👍"
-        )
-
-    elif st.session_state.humeur == "Drôle":
-        return f"😄 Tu as écrit : « {prompt_clean} » 😂"
-
-    elif st.session_state.humeur == "Sérieux":
-        return f"📌 Réponse :\n\nTu as demandé : {prompt_clean}\n➡️ Je t’aide clairement."
-
-    elif st.session_state.humeur == "Sarcastique":
-        return f"🙃 Sérieusement ? « {prompt_clean} » ?"
-
-    else:
-        return f"🤖 {st.session_state.nom_ia} : j’ai reçu → « {prompt_clean} » 👍"
+    except Exception as e:
+        return f"⚠️ Erreur IA : {e}"
 
 # ======================================================
 # 💬 CHAT
@@ -216,7 +155,7 @@ if st.session_state.page == "chat" and st.session_state.logged_in:
         st.rerun()
 
 # ======================================================
-# 🔐 ADMIN
+# 🔐 ADMIN (inchangé)
 # ======================================================
 if st.session_state.page == "admin":
 
