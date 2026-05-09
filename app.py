@@ -3,9 +3,10 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import requests
 from datetime import datetime
+import time
 
 # ======================================================
-# 🎨 CONFIGURATION VISUELLE & CSS
+# 🎨 CONFIGURATION VISUELLE & CSS AVANCÉ
 # ======================================================
 st.set_page_config(
     page_title="Hartur IA - Système Intégré",
@@ -14,251 +15,229 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Style CSS personnalisé pour améliorer l'interface
+# Design personnalisé pour une interface propre
 st.markdown("""
     <style>
-    .main {
-        background-color: #f5f7f9;
-    }
+    .main { background-color: #f5f7f9; }
     .stButton>button {
         width: 100%;
-        border-radius: 10px;
-        height: 3em;
-        background-color: #4CAF50;
+        border-radius: 12px;
+        height: 3.5em;
+        background: linear-gradient(45deg, #1e3c72 0%, #2a5298 100%);
         color: white;
+        font-weight: bold;
+        transition: 0.3s;
     }
-    .stTextInput>div>div>input {
-        border-radius: 10px;
-    }
-    .chat-bubble {
+    .stButton>button:hover { transform: translateY(-2px); box-shadow: 0px 5px 15px rgba(0,0,0,0.1); }
+    .chat-bubble-user {
+        background-color: #007bff;
+        color: white;
         padding: 15px;
-        border-radius: 15px;
+        border-radius: 15px 15px 0px 15px;
         margin-bottom: 10px;
+    }
+    .chat-bubble-bot {
+        background-color: #ffffff;
+        color: #333;
+        padding: 15px;
+        border-radius: 15px 15px 15px 0px;
+        margin-bottom: 10px;
+        border: 1px solid #e0e0e0;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # ======================================================
-# ⚙️ CONNEXIONS (GOOGLE SHEETS & API)
+# ⚙️ GESTION DES CONNEXIONS (SHEETS & MISTRAL)
 # ======================================================
 
-# Connexion au Google Sheet (doit être configuré dans les Secrets Streamlit)
+# Connexion sécurisée au Google Sheet
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error(f"Erreur de configuration Google Sheets : {e}")
+    st.error(f"Erreur de liaison base de données : {e}")
 
-# Clé API Mistral
+# Récupération de la clé API Mistral
 api_key = st.secrets.get("MISTRAL_KEY")
 
 # ======================================================
-# 💾 FONCTIONS BASE DE DONNÉES
+# 💾 FONCTIONS DE GESTION DES DONNÉES
 # ======================================================
 
-def get_data(sheet_name):
+def charger_donnees(onglet):
     """Récupère les données d'un onglet spécifique"""
     try:
-        return conn.read(worksheet=sheet_name, ttl=0)
-    except Exception as e:
-        st.error(f"Erreur lors de la lecture de l'onglet {sheet_name}: {e}")
+        return conn.read(worksheet=onglet, ttl=0)
+    except Exception:
         return pd.DataFrame()
 
-def save_data(sheet_name, dataframe):
-    """Sauvegarde les données dans un onglet spécifique"""
+def sauvegarder_donnees(onglet, df):
+    """Met à jour les données dans le Google Sheet"""
     try:
-        conn.update(worksheet=sheet_name, data=dataframe)
+        conn.update(worksheet=onglet, data=df)
         return True
     except Exception as e:
-        st.error(f"Erreur lors de la sauvegarde dans {sheet_name}: {e}")
+        st.error(f"Erreur de sauvegarde : {e}")
         return False
 
-def check_login(user, pwd):
-    """Vérifie les identifiants"""
-    df = get_data("comptes")
+def verifier_identifiants(pseudo, password):
+    """Vérifie la correspondance pseudo/mot de passe"""
+    df = charger_donnees("comptes")
     if not df.empty:
-        # Conversion en string pour éviter les erreurs de type
-        user_str = str(user)
-        pwd_str = str(pwd)
-        match = df[(df['pseudo'].astype(str) == user_str) & (df['password'].astype(str) == pwd_str)]
+        match = df[(df['pseudo'].astype(str) == str(pseudo)) & (df['password'].astype(str) == str(password))]
         return not match.empty
     return False
 
-def signup_user(user, pwd):
-    """Inscrit un nouvel utilisateur"""
-    df = get_data("comptes")
-    if user.lower() in df['pseudo'].astype(str).str.lower().values:
+def inscription_nouvel_utilisateur(pseudo, password):
+    """Inscrit un utilisateur si le pseudo est libre"""
+    df = charger_donnees("comptes")
+    if not df.empty and pseudo.lower() in df['pseudo'].astype(str).str.lower().values:
         return "existe"
     
-    new_user = pd.DataFrame([{"pseudo": user, "password": str(pwd)}])
-    updated_df = pd.concat([df, new_user], ignore_index=True)
-    if save_data("comptes", updated_df):
+    nouveau_df = pd.DataFrame([{"pseudo": pseudo, "password": str(password)}])
+    maj_df = pd.concat([df, nouveau_df], ignore_index=True)
+    if sauvegarder_donnees("comptes", maj_df):
         return "succes"
     return "erreur"
 
-def add_log(user, message, response):
-    """Enregistre une interaction dans les logs"""
-    df = get_data("logs")
-    now = datetime.now()
-    new_log = pd.DataFrame([{
-        "date": now.strftime("%d/%m/%Y"),
-        "heure": now.strftime("%H:%M"),
+def enregistrer_historique(user, message, reponse):
+    """Archive la discussion dans l'onglet logs"""
+    df = charger_donnees("logs")
+    maintenant = datetime.now()
+    nouvelle_entree = pd.DataFrame([{
+        "date": maintenant.strftime("%d/%m/%Y"),
+        "heure": maintenant.strftime("%H:%M"),
         "pseudo": user,
         "message": message,
-        "reponse": response
+        "reponse": reponse
     }])
-    updated_df = pd.concat([df, new_log], ignore_index=True)
-    save_data("logs", updated_df)
+    df_final = pd.concat([df, nouvelle_entree], ignore_index=True)
+    sauvegarder_donnees("logs", df_final)
 
 # ======================================================
-# 🧠 LOGIQUE IA (MISTRAL)
+# 🧠 CŒUR IA (MISTRAL API)
 # ======================================================
 
-def ask_hartur(prompt):
+def interroger_hartur(prompt):
+    """Envoie la requête à Mistral AI"""
     if not api_key:
-        return "⚠️ Configuration manquante : MISTRAL_KEY non trouvée."
+        return "⚠️ Erreur : MISTRAL_KEY manquante dans les secrets Streamlit."
     
     url = "https://api.mistral.ai/v1/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    }
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
     data = {
         "model": "open-mistral-7b",
         "messages": [
-            {"role": "system", "content": "Tu es Hartur, une IA performante. Réponds de façon claire."},
+            {"role": "system", "content": "Tu es Hartur, une IA puissante et polie."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.7
     }
     
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=15)
         response.raise_for_status()
         return response.json()['choices'][0]['message']['content']
     except Exception as e:
         return f"❌ Erreur IA : {str(e)}"
 
 # ======================================================
-# 🖥️ NAVIGATION & ÉTATS DE SESSION
+# 🎮 NAVIGATION ET ÉTATS
 # ======================================================
 
-if "auth" not in st.session_state: st.session_state.auth = False
-if "user" not in st.session_state: st.session_state.user = None
-if "page" not in st.session_state: st.session_state.page = "accueil"
+if "authentifie" not in st.session_state: st.session_state.authentifie = False
+if "utilisateur" not in st.session_state: st.session_state.utilisateur = None
+if "page_actuelle" not in st.session_state: st.session_state.page_actuelle = "accueil"
 
-def logout():
-    st.session_state.auth = False
-    st.session_state.user = None
-    st.session_state.page = "accueil"
+def naviguer_vers(nom_page):
+    st.session_state.page_actuelle = nom_page
     st.rerun()
 
 # --- BARRE LATÉRALE ---
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/4712/4712035.png", width=100)
-    st.title("Menu Hartur")
-    
-    if st.session_state.auth:
-        st.write(f"👤 Connecté en tant que : **{st.session_state.user}**")
-        if st.button("Déconnexion"):
-            logout()
+    st.title("🤖 Hartur Control")
+    st.write("---")
+    if st.session_state.authentifie:
+        st.success(f"Connecté : **{st.session_state.utilisateur}**")
+        if st.button("🚪 Déconnexion"):
+            st.session_state.authentifie = False
+            st.session_state.utilisateur = None
+            naviguer_vers("accueil")
     else:
         if st.button("🏠 Accueil"):
-            st.session_state.page = "accueil"
-            st.rerun()
+            naviguer_vers("accueil")
     
-    st.markdown("---")
-    if st.button("🔐 Accès Admin"):
-        st.session_state.page = "admin"
-        st.rerun()
+    st.write("---")
+    if st.button("🔐 Espace Admin"):
+        naviguer_vers("admin")
 
-# --- LOGIQUE DES PAGES ---
+# ======================================================
+# 📑 PAGES DE L'APPLICATION
+# ======================================================
 
-# 1. PAGE ACCUEIL
-if st.session_state.page == "accueil" and not st.session_state.auth:
-    st.title("🤖 Système Hartur IA")
-    st.info("Bienvenue. Veuillez vous connecter ou créer un compte pour accéder à l'IA.")
+# 1. PAGE D'ACCUEIL (LOGINS)
+if st.session_state.page_actuelle == "accueil" and not st.session_state.authentifie:
+    st.title("🚀 Accès Système Hartur IA")
+    col_login, col_signup = st.columns(2)
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("Connexion")
-        l_user = st.text_input("Pseudo", key="l_u")
-        l_pwd = st.text_input("Mot de passe", type="password", key="l_p")
+    with col_login:
+        st.subheader("🔑 Connexion")
+        u_login = st.text_input("Pseudo", key="l1")
+        p_login = st.text_input("Mot de passe", type="password", key="p1")
         if st.button("Se connecter"):
-            if check_login(l_user, l_pwd):
-                st.session_state.auth = True
-                st.session_state.user = l_user
-                st.session_state.page = "chat"
-                st.success("Connexion réussie !")
-                st.rerun()
+            if verifier_identifiants(u_login, p_login):
+                st.session_state.authentifie = True
+                st.session_state.utilisateur = u_login
+                naviguer_vers("chat")
             else:
-                st.error("Identifiants incorrects.")
+                st.error("Pseudo ou mot de passe incorrect.")
 
-    with col2:
-        st.subheader("Inscription")
-        s_user = st.text_input("Nouveau Pseudo", key="s_u")
-        s_pwd = st.text_input("Nouveau Mot de passe", type="password", key="s_p")
-        if st.button("Créer mon compte"):
-            if s_user and s_pwd:
-                res = signup_user(s_user, s_pwd)
-                if res == "succes":
-                    st.success("Compte créé ! Connectez-vous à gauche.")
-                elif res == "existe":
-                    st.warning("Ce pseudo est déjà utilisé.")
-                else:
-                    st.error("Erreur lors de l'enregistrement.")
-            else:
-                st.error("Veuillez remplir tous les champs.")
+    with col_signup:
+        st.subheader("🆕 Inscription")
+        u_sign = st.text_input("Nouveau pseudo", key="l2")
+        p_sign = st.text_input("Nouveau mot de passe", type="password", key="p2")
+        if st.button("Créer un compte"):
+            if u_sign and p_sign:
+                res = inscription_nouvel_utilisateur(u_sign, p_sign)
+                if res == "succes": st.success("Compte créé ! Vous pouvez vous connecter.")
+                elif res == "existe": st.warning("Ce pseudo est déjà pris.")
+                else: st.error("Erreur lors de l'inscription.")
 
-# 2. PAGE CHAT (Connecté)
-elif st.session_state.auth or st.session_state.page == "chat":
-    st.title(f"💬 Espace de Discussion - {st.session_state.user}")
+# 2. PAGE DE CHAT
+elif st.session_state.page_actuelle == "chat" or st.session_state.authentifie:
+    if not st.session_state.authentifie: naviguer_vers("accueil")
     
-    # Zone d'affichage des messages
-    chat_container = st.container()
+    st.title(f"💬 Console Hartur - {st.session_state.utilisateur}")
     
-    # Entrée utilisateur
-    user_query = st.chat_input("Posez votre question à Hartur...")
+    # Entrée du chat
+    prompt_utilisateur = st.chat_input("Posez votre question ici...")
     
-    if user_query:
+    if prompt_utilisateur:
         with st.chat_message("user"):
-            st.write(user_query)
+            st.markdown(f'<div class="chat-bubble-user">{prompt_utilisateur}</div>', unsafe_allow_html=True)
         
         with st.chat_message("assistant"):
             with st.spinner("Hartur réfléchit..."):
-                response = ask_hartur(user_query)
-                st.write(response)
-                # Sauvegarde automatique dans l'onglet logs
-                add_log(st.session_state.user, user_query, response)
+                reponse_ia = interroger_hartur(prompt_utilisateur)
+                st.markdown(f'<div class="chat-bubble-bot">{reponse_ia}</div>', unsafe_allow_html=True)
+                enregistrer_historique(st.session_state.utilisateur, prompt_utilisateur, reponse_ia)
 
 # 3. PAGE ADMIN
-elif st.session_state.page == "admin":
-    st.title("🔐 Administration du Système")
-    master_key = st.text_input("Code Maître", type="password")
+elif st.session_state.page_actuelle == "admin":
+    st.title("🔐 Administration")
+    code_admin = st.text_input("Code de sécurité", type="password")
     
-    if master_key == "babar":
-        tab_users, tab_logs = st.tabs(["👥 Gestion Comptes", "📜 Historique Logs"])
-        
-        with tab_users:
-            st.subheader("Base de données des utilisateurs")
-            df_u = get_data("comptes")
-            st.dataframe(df_u, use_container_width=True)
-            
-        with tab_logs:
-            st.subheader("Historique complet des conversations")
-            df_l = get_data("logs")
-            st.dataframe(df_l, use_container_width=True)
-            
-    elif master_key != "":
-        st.error("Code incorrect.")
-        
-    if st.button("Retour à l'accueil"):
-        st.session_state.page = "accueil"
-        st.rerun()
+    if code_admin == "babar":
+        tab1, tab2 = st.tabs(["📂 Comptes Utilisateurs", "📜 Logs des Discussions"])
+        with tab1:
+            st.dataframe(charger_donnees("comptes"), use_container_width=True)
+        with tab2:
+            st.dataframe(charger_donnees("logs"), use_container_width=True)
+    elif code_admin != "":
+        st.error("Code admin incorrect.")
+    
+    if st.button("Retour"): naviguer_vers("accueil")
 
-# ======================================================
-# PIED DE PAGE
-# ======================================================
-st.markdown("---")
-st.caption("Hartur IA v2.4 - Système sécurisé par Google Sheets")
+# Pied de page
+st.write("---")
+st.caption("Hartur IA v3.1 | Opérationnel")
