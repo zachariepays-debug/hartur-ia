@@ -1,211 +1,243 @@
-import streamlit as st
-import os
+[17:17, 09/05/2026] Zach: import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
 import requests
-import shutil
+
+# --- CONFIGURATION ---
+st.set_page_config(page_title="Hartur IA", page_icon="🤖")
+
+# Connexion au Google Sheet (utilise le lien dans tes Secrets)
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+# --- FONCTIONS DE SAUVEGARDE ---
+
+def inscrire_utilisateur(pseudo, password):
+    try:
+        # Lit le tableau actuel (onglet 'comptes')
+        df = conn.read(worksheet="comptes", ttl=0)
+        
+        # Vérifie si le pseudo existe déjà
+        if pseudo.lower() in df['pseudo'].astype(str).str.lower().values:
+            return False
+        
+        # Ajoute le nouveau compte
+        new_user = pd.DataFrame([{"pseudo": pseudo, "password": str(password)}])
+        df = pd.concat([df, new_user], ignore_index=True)
+        
+        # Envoie la mise à jour vers Google Sheets
+        conn.update(worksheet="comptes", data=df)
+        return True
+    except Exception as e:
+        st.error(f"Erreur de connexion au Sheet : {e}")
+        return False
+
+def verifier_connexion(pseudo, password):
+    try:
+        df = conn.read(worksheet="comptes", ttl=0)
+        match = df[(df['pseudo'].astype(str) == str(pseudo)) & (df['password'].astype(str) == str(password))]
+        return not match.empty
+    except:
+        return False
+
+# --- INTERFACE ---
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    tab1, tab2 = st.tabs(["Connexion", "Créer un compte"])
+    
+    with tab1:
+        u = st.text_input("Pseudo", key="login_u")
+        p = st.text_input("Mot de passe", type="password", key="login_p")
+        if st.button("Se connecter"):
+            if verifier_connexion(u, p):
+                st.session_state.logged_in = True
+                st.rerun()
+            else:
+                st.error("Pseudo ou mot de passe incorrect")
+
+    with tab2:
+        new_u = st.text_input("Choisir un Pseudo", key="reg_u")
+        new_p = st.text_input("Choisir un Mot de passe", type="password", key="reg_p")
+        if st.button("S'inscrire"):
+            if inscrire_utilisateur(new_u, new_p):
+                st.success("Compte créé avec succès ! Tu peux te connecter.")
+            else:
+                st.error("Ce pseudo est déjà pris ou erreur technique.")
+
+else:
+    st.title("🤖 Hartur IA est prêt")
+    st.write(f"Bienvenue {st.session_state.get('login_u', 'ami')} !")
+    
+    if st.button("Se déconnecter"):
+        st.session_state.logged_in = False
+        st.rerun()
+[17:18, 09/05/2026] Zach: import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+import requests
 from datetime import datetime
 
 # ======================================================
-# ⚙️ CONFIGURATION
+# ⚙️ CONFIGURATION & CONNEXION
 # ======================================================
 st.set_page_config(page_title="Hartur IA", page_icon="🤖", layout="wide")
+
+# Récupération des clés dans les Secrets
 api_key = st.secrets.get("MISTRAL_KEY")
+# Connexion au Google Sheet
+conn = st.connection("gsheets", type=GSheetsConnection)
 
 # ======================================================
-# 💾 SESSION STATE
+# 💾 LOGIQUE DE STOCKAGE (GOOGLE SHEETS)
 # ======================================================
-if "page" not in st.session_state: st.session_state.page = "home"
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
-if "username" not in st.session_state: st.session_state.username = None
-if "messages" not in st.session_state: st.session_state.messages = []
-if "humeur" not in st.session_state: st.session_state.humeur = "Équilibrée"
-
-# ======================================================
-# 📁 GESTION DES DOSSIERS
-# ======================================================
-os.makedirs("accounts", exist_ok=True)
-os.makedirs("data", exist_ok=True)      
-os.makedirs("user_data", exist_ok=True) 
-
-def create_account(user, pwd):
-    file = f"accounts/{user.lower()}.txt"
-    if os.path.exists(file): return False
-    with open(file, "w", encoding="utf-8") as f: f.write(pwd)
-    return True
 
 def login_account(user, pwd):
-    file = f"accounts/{user.lower()}.txt"
-    if not os.path.exists(file): return False
-    with open(file, "r", encoding="utf-8") as f: return f.read().strip() == pwd
+    try:
+        df = conn.read(worksheet="comptes", ttl=0)
+        # Vérification exacte pseudo et mot de passe
+        match = df[(df['pseudo'].astype(str) == str(user)) & (df['password'].astype(str) == str(pwd))]
+        return not match.empty
+    except:
+        return False
 
-def charger_historique_utilisateur(user):
-    chemin_perso = f"user_data/{user.lower()}/history.txt"
-    historique = []
-    if os.path.exists(chemin_perso):
-        with open(chemin_perso, "r", encoding="utf-8") as f:
-            for ligne in f:
-                if " :" in ligne and "IA  :" not in ligne and "=" not in ligne and "---" not in ligne:
-                    try:
-                        contenu = ligne.split(" :")[1].strip()
-                        historique.append({"role": "user", "content": contenu})
-                    except: pass
-                elif "IA  :" in ligne:
-                    historique.append({"role": "assistant", "content": ligne.split("IA  :")[1].strip()})
-    return historique
+def create_account(user, pwd):
+    try:
+        df = conn.read(worksheet="comptes", ttl=0)
+        # Vérifie si le pseudo existe déjà
+        if user.lower() in df['pseudo'].astype(str).str.lower().values:
+            return False
+        
+        # Ajoute la ligne et met à jour Google Sheets
+        new_row = pd.DataFrame([{"pseudo": user, "password": str(pwd)}])
+        df = pd.concat([df, new_row], ignore_index=True)
+        conn.update(worksheet="comptes", data=df)
+        return True
+    except:
+        return False
 
-def sauvegarder_message(user, texte, reponse):
-    horaire = datetime.now().strftime("%H:%M")
-    date_jour = datetime.now().strftime("%d-%m-%Y")
-    pseudo = user.upper()
-    
-    # 1. ADMIN (Question puis Réponse)
-    chemin_date = f"data/{date_jour}"
-    os.makedirs(chemin_date, exist_ok=True)
-    with open(f"{chemin_date}/global_logs.txt", "a", encoding="utf-8") as f:
-        f.write("###\n")
-        f.write(f"[{horaire}] {pseudo} : {texte}\n") # Question en premier
-        f.write(f"[{horaire}] IA  : {reponse}\n")   # Réponse ensuite
-    
-    # 2. PERSO (Question puis Réponse)
-    chemin_perso = f"user_data/{user.lower()}"
-    os.makedirs(chemin_perso, exist_ok=True)
-    with open(f"{chemin_perso}/history.txt", "a", encoding="utf-8") as f:
-        f.write("###\n")
-        f.write(f"--- Discussion du {date_jour} ({horaire}) ---\n")
-        f.write(f"{pseudo} : {texte}\n") # Question en premier
-        f.write(f"IA  : {reponse}\n")   # Réponse ensuite
+def sauvegarder_log(user, texte, reponse):
+    try:
+        df_logs = conn.read(worksheet="logs", ttl=0)
+        now = datetime.now()
+        new_log = pd.DataFrame([{
+            "date": now.strftime("%d-%m-%Y"),
+            "heure": now.strftime("%H:%M"),
+            "pseudo": user,
+            "message": texte,
+            "reponse": reponse
+        }])
+        df_logs = pd.concat([df_logs, new_log], ignore_index=True)
+        conn.update(worksheet="logs", data=df_logs)
+    except:
+        pass
 
 # ======================================================
-# 🎨 AFFICHAGE COULEUR ET TRI INVERSÉ (ADMIN)
+# 🧠 IA MISTRAL
 # ======================================================
-def afficher_texte_admin_inverse(texte):
-    blocs = texte.split("###")
-    blocs_valides = [b.strip() for b in blocs if b.strip()]
-    # On garde le tri inversé : le bloc de conversation le plus récent apparaît en haut
-    blocs_inverses = blocs_valides[::-1] 
 
-    for bloc in blocs_inverses:
-        lignes = bloc.split("\n")
-        for ligne in lignes:
-            # Affichage de l'utilisateur en Bleu (Question)
-            if " :" in ligne and "IA  :" not in ligne and "---" not in ligne:
-                st.markdown(f"<span style='color:#3498db'><b>{ligne}</b></span>", unsafe_allow_html=True)
-            # Affichage de l'IA en Orange (Réponse)
-            elif "IA  :" in ligne:
-                st.markdown(f"<span style='color:#e67e22'>{ligne}</span>", unsafe_allow_html=True)
-            else:
-                st.write(ligne)
-        st.markdown("<hr style='margin:10px 0; border:0.5px solid #333'>", unsafe_allow_html=True)
-
-# ======================================================
-# 🧠 IA LOGIQUE
-# ======================================================
 def generer_reponse(prompt):
-    if not api_key: return "Clé manquante."
-    
-    instructions = {
-        "Équilibrée": "Tu es Hartur. Ton ton est poli, posé et un peu plus sérieux, tout en restant moderne. Évite le langage trop familier.", 
-        "Drôle": "Sois amusant et plein d'esprit.", 
-        "Sérieux": "Sois formel, précis et synthétique.", 
-        "Sarcastique": "Utilise l'ironie avec finesse.", 
-        "Raisonnement complexe": "Fournis une analyse structurée."
-    }
+    if not api_key:
+        return "Désolé, ma clé API est manquante dans les secrets."
     
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}"}
-    data = {"model": "open-mistral-7b", "messages": [{"role": "system", "content": instructions.get(st.session_state.humeur, "Tu es Hartur.")}, {"role": "user", "content": prompt}], "temperature": 0.7}
+    data = {
+        "model": "open-mistral-7b",
+        "messages": [
+            {"role": "system", "content": "Tu es Hartur, une IA polie et efficace."},
+            {"role": "user", "content": prompt}
+        ]
+    }
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=12)
-        return response.json()['choices'][0]['message']['content']
-    except: return "Erreur réseau..."
+        r = requests.post(url, headers=headers, json=data)
+        return r.json()['choices'][0]['message']['content']
+    except:
+        return "Une erreur est survenue lors de la connexion à l'IA."
 
 # ======================================================
-# 🏠 NAVIGATION
+# 🖥️ INTERFACE UTILISATEUR
 # ======================================================
-col1, col2 = st.columns([9, 1])
-with col2:
-    if st.button("🔐 Admin"): st.session_state.page = "admin"; st.rerun()
 
+if "page" not in st.session_state: st.session_state.page = "home"
+if "username" not in st.session_state: st.session_state.username = None
+
+# --- ACCUEIL ---
 if st.session_state.page == "home":
-    st.title("🤖 Hartur IA")
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("🔑 Connexion"): st.session_state.page = "login"; st.rerun()
-    with c2:
-        if st.button("🆕 Créer compte"): st.session_state.page = "signup"; st.rerun()
+    st.title("🤖 Hartur IA Permanent")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔑 Connexion"):
+            st.session_state.page = "login"
+            st.rerun()
+    with col2:
+        if st.button("🆕 Créer un compte"):
+            st.session_state.page = "signup"
+            st.rerun()
 
+# --- INSCRIPTION ---
 elif st.session_state.page == "signup":
-    u = st.text_input("Pseudo")
-    p = st.text_input("Pass", type="password")
-    if st.button("Créer"):
-        if create_account(u, p): st.session_state.page = "login"; st.rerun()
-        else: st.error("Pseudo déjà utilisé.")
-
-elif st.session_state.page == "login":
-    u = st.text_input("Pseudo")
-    p = st.text_input("Pass", type="password")
-    if st.button("Entrer"):
-        if login_account(u, p):
-            st.session_state.logged_in, st.session_state.username = True, u
-            st.session_state.messages = charger_historique_utilisateur(u)
-            st.session_state.page = "chat"; st.rerun()
-        else: st.error("Accès refusé.")
-
-elif st.session_state.page == "chat":
-    st.title(f"🤖 Discussion")
-    st.sidebar.write(f"Utilisateur : **{st.session_state.username}**")
-    st.session_state.humeur = st.sidebar.selectbox("Personnalité", ["Équilibrée", "Drôle", "Sérieux", "Sarcastique", "Raisonnement complexe"])
-    for m in st.session_state.messages:
-        with st.chat_message(m["role"]): st.markdown(m["content"])
-    prompt = st.chat_input("Votre message...")
-    if prompt:
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
-        reponse = generer_reponse(prompt)
-        st.session_state.messages.append({"role": "assistant", "content": reponse})
-        with st.chat_message("assistant"): st.markdown(reponse)
-        sauvegarder_message(st.session_state.username, prompt, reponse)
-    if st.sidebar.button("Déconnexion"):
-        st.session_state.logged_in, st.session_state.messages, st.session_state.page = False, [], "home"
+    st.subheader("Créer un nouveau compte")
+    new_u = st.text_input("Pseudo choisi")
+    new_p = st.text_input("Mot de passe choisi", type="password")
+    if st.button("Valider l'inscription"):
+        if create_account(new_u, new_p):
+            st.success("Compte créé ! Tu peux maintenant te connecter.")
+            st.session_state.page = "login"
+            st.rerun()
+        else:
+            st.error("Ce pseudo est déjà pris ou le tableau est mal configuré.")
+    if st.button("Retour"):
+        st.session_state.page = "home"
         st.rerun()
 
-# ======================================================
-# 🔐 ADMIN (ORDRE LOGIQUE : USER PUIS IA)
-# ======================================================
-elif st.session_state.page == "admin":
-    st.title("🔐 Panneau Admin")
-    if st.text_input("Mot de passe", type="password") == "babar":
-        t1, t2, t3 = st.tabs(["👤 Comptes", "📅 Par Date", "📂 Par Utilisateur"])
-        
-        with t1:
-            for f in os.listdir("accounts"):
-                if f.endswith(".txt"):
-                    with open(f"accounts/{f}", "r", encoding="utf-8") as file:
-                        st.write(f"👤 `{f.replace('.txt', '')}` | MDP: `{file.read()}`")
+# --- CONNEXION ---
+elif st.session_state.page == "login":
+    st.subheader("Connexion")
+    u = st.text_input("Pseudo")
+    p = st.text_input("Mot de passe", type="password")
+    if st.button("Entrer"):
+        if login_account(u, p):
+            st.session_state.username = u
+            st.session_state.page = "chat"
+            st.rerun()
+        else:
+            st.error("Identifiants incorrects.")
+    if st.button("Retour"):
+        st.session_state.page = "home"
+        st.rerun()
 
-        with t2:
-            if st.button("🗑️ Vider l'historique"):
-                for folder in ["data", "user_data"]:
-                    if os.path.exists(folder): shutil.rmtree(folder); os.makedirs(folder)
-                st.rerun()
-            if os.path.exists("data"):
-                dates = sorted([d for d in os.listdir("data") if os.path.isdir(f"data/{d}")], reverse=True)
-                for d in dates:
-                    with st.expander(f"📅 Journée du : {d}"):
-                        path_log = f"data/{d}/global_logs.txt"
-                        if os.path.exists(path_log):
-                            with open(path_log, "r", encoding="utf-8") as f:
-                                afficher_texte_admin_inverse(f.read())
-        
-        with t3:
-            if os.path.exists("user_data"):
-                utilisateurs = sorted([u for u in os.listdir("user_data") if os.path.isdir(f"user_data/{u}")])
-                if utilisateurs:
-                    u_select = st.selectbox("Choisir l'utilisateur", utilisateurs)
-                    hist_path = f"user_data/{u_select}/history.txt"
-                    if os.path.exists(hist_path):
-                        with open(hist_path, "r", encoding="utf-8") as f:
-                            data_all = f.read()
-                        st.download_button(label=f"💾 Exporter {u_select.upper()}", data=data_all, file_name=f"archive_{u_select}.txt")
-                        st.divider()
-                        afficher_texte_admin_inverse(data_all)
-    if st.button("⬅ Retour"): st.session_state.page = "home"; st.rerun()
+# --- CHAT ---
+elif st.session_state.page == "chat":
+    st.title(f"💬 Session de {st.session_state.username}")
+    
+    if st.sidebar.button("Se déconnecter"):
+        st.session_state.page = "home"
+        st.session_state.username = None
+        st.rerun()
+
+    prompt = st.chat_input("Pose ta question à Hartur...")
+    if prompt:
+        st.chat_message("user").write(prompt)
+        reponse = generer_reponse(prompt)
+        st.chat_message("assistant").write(reponse)
+        # Sauvegarde automatique dans l'onglet 'logs'
+        sauvegarder_log(st.session_state.username, prompt, reponse)
+
+# --- PANEL ADMIN ---
+if st.sidebar.button("🔐 Admin"):
+    st.session_state.page = "admin"
+    st.rerun()
+
+if st.session_state.page == "admin":
+    st.title("Panneau d'administration")
+    admin_p = st.text_input("Mot de passe maître", type="password")
+    if admin_p == "babar":
+        st.write("### Liste des utilisateurs (Google Sheets)")
+        st.dataframe(conn.read(worksheet="comptes", ttl=0))
+        st.write("### Historique des messages")
+        st.dataframe(conn.read(worksheet="logs", ttl=0))
+    if st.button("Quitter l'admin"):
+        st.session_state.page = "home"
+        st.rerun()
