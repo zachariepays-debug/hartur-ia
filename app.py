@@ -1,94 +1,117 @@
 import streamlit as st
 import pandas as pd
 import requests
-import os
+import base64
+import json
+from io import StringIO
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Hartur", layout="centered")
-FICHIER_COMPTES = "comptes.csv"
-FICHIER_CHAT = "historique.csv"
+# --- CONFIGURATION À MODIFIER ---
+# REMPLACE BIEN ICI PAR TON PSEUDO ET LE NOM DE TON PROJET GITHUB
+# Exemple: "Zach/hartur-ia"
+REPO_NOM = "TON_PSEUDO/TON_PROJET" 
 
-# Création des fichiers si vides
-for f, cols in {FICHIER_COMPTES: "pseudo,password", FICHIER_CHAT: "pseudo,role,content"}.items():
-    if not os.path.exists(f) or os.stat(f).st_size == 0:
-        with open(f, "w") as file: file.write(cols + "\n")
-
+# On récupère tes clés que tu as mises dans les Secrets
 MISTRAL_API_KEY = st.secrets["MISTRAL_KEY"]
+GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-# --- PERSONNALITÉ DE HARTUR ---
-def parler_a_ia(prompt, historique_utilisateur):
+st.set_page_config(page_title="Hartur", layout="centered")
+
+# --- FONCTIONS POUR GITHUB ---
+
+def lire_csv_github(nom_fichier):
+    url = f"https://api.github.com/repos/{REPO_NOM}/contents/{nom_fichier}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    r = requests.get(url, headers=headers)
+    if r.status_code == 200:
+        content = r.json()
+        decoded = base64.b64decode(content['content']).decode('utf-8')
+        return pd.read_csv(StringIO(decoded)), content['sha']
+    return pd.DataFrame(columns=["pseudo", "role", "content"]), None
+
+def ecrire_csv_github(nom_fichier, df, sha):
+    url = f"https://api.github.com/repos/{REPO_NOM}/contents/{nom_fichier}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    csv_content = df.to_csv(index=False)
+    encoded = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
+    data = {
+        "message": "Sauvegarde automatique Hartur",
+        "content": encoded,
+        "sha": sha
+    }
+    requests.put(url, data=json.dumps(data), headers=headers)
+
+# --- FONCTION IA (TON POTE HARTUR) ---
+def parler_a_ia(prompt, historique):
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}"}
-    
-    # Nouveau caractère : un pote, un peu brut, mais à l'écoute
-    system_msg = """Tu es Hartur, un pote proche de l'utilisateur. 
-    Tu n'es pas un assistant poli et ennuyeux. Parle normalement, comme dans la rue. 
-    Tu peux être un tout petit peu vulgaire si ça rend la discussion plus vraie, mais reste cool et pas insultant. 
-    L'utilisateur doit pouvoir se confier à toi à 100%. Sois intuitif, direct, et surtout pas minimaliste. 
-    Fais des vraies phrases, donne ton avis, et sois là pour lui comme un vrai pote."""
+    system_msg = "Tu es Hartur, un pote proche. Pas de politesse, sois direct, un peu vulgaire si besoin mais reste cool. Tu es là pour qu'on se confie à toi."
     
     messages = [{"role": "system", "content": system_msg}]
-    for m in historique_utilisateur[-8:]: # Se souvient des 8 derniers messages
+    for m in historique[-6:]:
         messages.append({"role": m["role"], "content": m["content"]})
     messages.append({"role": "user", "content": prompt})
     
-    data = {"model": "mistral-small", "messages": messages}
     try:
-        response = requests.post(url, json=data, headers=headers)
+        response = requests.post(url, json={"model": "mistral-small", "messages": messages}, headers=headers)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Gros, j'ai un bug technique là, réessaie un peu plus tard."
+        return "Gros, j'ai un bug technique là."
 
-# --- SESSION ---
+# --- INTERFACE ---
 if "user" not in st.session_state:
     st.session_state.user = None
 
-# --- INTERFACE ---
 if st.session_state.user is None:
     st.title("🤖 Hartur")
-    tab1, tab2 = st.tabs(["Connexion", "Inscription"])
-    with tab1:
-        p_co = st.text_input("Pseudo", key="p_co")
-        m_co = st.text_input("Mot de passe", type="password", key="m_co")
-        if st.button("Se connecter"):
-            df = pd.read_csv(FICHIER_COMPTES)
-            if not df.empty and ((df['pseudo'] == p_co) & (df['password'].astype(str) == str(m_co))).any():
-                st.session_state.user = p_co
-                st.rerun()
-            else: st.error("C'est pas bon, réessaie.")
-    with tab2:
-        p_ins = st.text_input("Ton pseudo")
-        m_ins = st.text_input("Ton mot de passe", type="password")
-        if st.button("Créer mon compte"):
-            df = pd.read_csv(FICHIER_COMPTES)
-            if p_ins in df['pseudo'].values: st.warning("Déjà pris, gros.")
-            else:
-                pd.concat([df, pd.DataFrame([{"pseudo": p_ins, "password": str(m_ins)}])]).to_csv(FICHIER_COMPTES, index=False)
-                st.success("C'est fait ! Connecte-toi.")
+    p_co = st.text_input("Pseudo")
+    m_co = st.text_input("Mot de passe", type="password")
+    if st.button("Se connecter"):
+        df_comptes, _ = lire_csv_github("comptes.csv")
+        if not df_comptes.empty and ((df_comptes['pseudo'] == p_co) & (df_comptes['password'].astype(str) == str(m_co))).any():
+            st.session_state.user = p_co
+            st.rerun()
+        else:
+            st.error("Inconnu, t'es qui ?")
 else:
-    # --- CHAT ---
-    df_chat = pd.read_csv(FICHIER_CHAT)
-    user_chat = df_chat[df_chat['pseudo'] == st.session_state.user]
-    
-    # Barre latérale (Admin + Déconnexion)
+    # On charge l'historique depuis GitHub
+    df_glob, sha_glob = lire_csv_github("historique.csv")
+    user_hist = df_glob[df_glob['pseudo'] == st.session_state.user]
+
     with st.sidebar:
-        st.write(f"Pote : **{st.session_state.user}**")
-        if st.button("Se barrer"):
+        st.write(f"Utilisateur : **{st.session_state.user}**")
+        if st.button("Se déconnecter"):
             st.session_state.user = None
             st.rerun()
+        st.divider()
         with st.expander("🛡️ Admin"):
             if st.text_input("Code", type="password") == "1234":
-                st.dataframe(pd.read_csv(FICHIER_COMPTES))
+                st.write("Historique complet :")
+                st.dataframe(df_glob)
 
     st.title("Discussion avec Hartur")
-    for _, row in user_chat.iterrows():
-        with st.chat_message(row['role']): st.write(row['content'])
+
+    for _, row in user_hist.iterrows():
+        with st.chat_message(row['role']):
+            st.write(row['content'])
 
     prompt = st.chat_input("Dis-moi tout...")
     if prompt:
-        with st.chat_message("user"): st.write(prompt)
-        pd.DataFrame([{"pseudo": st.session_state.user, "role": "user", "content": prompt}]).to_csv(FICHIER_CHAT, mode='a', header=False, index=False)
+        with st.chat_message("user"):
+            st.write(prompt)
         
-        reponse = parler_a_ia(prompt, user_chat.to_dict('records'))
-        with st.chat_message("assistant"): st.write(reponse)
-        pd.DataFrame([{"pseudo": st.session_state.user, "role": "assistant", "content": reponse}]).to_csv(FICHIER_CHAT, mode='a', header=False, index=False)
+        # Sauvegarde utilisateur sur GitHub
+        new_row = pd.DataFrame([{"pseudo": st.session_state.user, "role": "user", "content": prompt}])
+        df_glob = pd.concat([df_glob, new_row], ignore_index=True)
+        ecrire_csv_github("historique.csv", df_glob, sha_glob)
+        
+        # Récupération de la réponse IA
+        reponse = parler_a_ia(prompt, user_hist.to_dict('records'))
+        
+        with st.chat_message("assistant"):
+            st.write(reponse)
+        
+        # On reprend le SHA tout neuf pour enregistrer la réponse de l'IA
+        _, sha_neuf = lire_csv_github("historique.csv")
+        new_row_ia = pd.DataFrame([{"pseudo": st.session_state.user, "role": "assistant", "content": reponse}])
+        df_glob = pd.concat([df_glob, new_row_ia], ignore_index=True)
+        ecrire_csv_github("historique.csv", df_glob, sha_neuf)
