@@ -3,286 +3,262 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import requests
 from datetime import datetime
-import time
 
 # ======================================================
-# 🎨 DESIGN & INTERFACE (CSS AVANCÉ)
+# 🎨 CONFIGURATION VISUELLE & CSS
 # ======================================================
 st.set_page_config(
-    page_title="Hartur IA - Système Ultime",
+    page_title="Hartur IA - Système Intégré",
     page_icon="🤖",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Injection de style pour une interface moderne
+# Style CSS personnalisé pour améliorer l'interface
 st.markdown("""
     <style>
-    /* Global */
-    .main { background-color: #f0f2f6; }
-    
-    /* Boutons personnalisés */
+    .main {
+        background-color: #f5f7f9;
+    }
     .stButton>button {
         width: 100%;
-        border-radius: 20px;
-        border: none;
-        height: 3.5em;
-        background: linear-gradient(45deg, #1e3c72 0%, #2a5298 100%);
+        border-radius: 10px;
+        height: 3em;
+        background-color: #4CAF50;
         color: white;
-        font-weight: bold;
-        transition: 0.3s;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.1);
     }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0px 6px 15px rgba(0,0,0,0.2);
-        color: #ffeb3b;
-    }
-    
-    /* Inputs */
     .stTextInput>div>div>input {
+        border-radius: 10px;
+    }
+    .chat-bubble {
+        padding: 15px;
         border-radius: 15px;
-        border: 1px solid #d1d8e0;
-    }
-
-    /* Bulles de Chat */
-    .user-msg {
-        background-color: #007bff;
-        color: white;
-        padding: 15px;
-        border-radius: 20px 20px 0px 20px;
         margin-bottom: 10px;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
-    }
-    .bot-msg {
-        background-color: white;
-        color: #333;
-        padding: 15px;
-        border-radius: 20px 20px 20px 0px;
-        margin-bottom: 10px;
-        border: 1px solid #eee;
-        box-shadow: 2px 2px 5px rgba(0,0,0,0.05);
     }
     </style>
     """, unsafe_allow_html=True)
 
 # ======================================================
-# ⚙️ CONNEXIONS RÉSEAU & CLÉS
+# ⚙️ CONNEXIONS (GOOGLE SHEETS & API)
 # ======================================================
 
-# Initialisation de la connexion Google Sheets
+# Connexion au Google Sheet (doit être configuré dans les Secrets Streamlit)
 try:
     conn = st.connection("gsheets", type=GSheetsConnection)
 except Exception as e:
-    st.error(f"❌ Erreur de liaison Google Sheets : {e}")
+    st.error(f"Erreur de configuration Google Sheets : {e}")
 
-# Récupération sécurisée de la clé Mistral
-MISTRAL_KEY = st.secrets.get("MISTRAL_KEY")
+# Clé API Mistral
+api_key = st.secrets.get("MISTRAL_KEY")
 
 # ======================================================
-# 💾 LOGIQUE DE DONNÉES (CRUD GOOGLE SHEETS)
+# 💾 FONCTIONS BASE DE DONNÉES
 # ======================================================
 
-def charger_feuille(nom_feuille):
-    """Charge les données d'un onglet spécifique sans cache (ttl=0)"""
+def get_data(sheet_name):
+    """Récupère les données d'un onglet spécifique"""
     try:
-        return conn.read(worksheet=nom_feuille, ttl=0)
+        return conn.read(worksheet=sheet_name, ttl=0)
     except Exception as e:
-        st.sidebar.error(f"Erreur lecture '{nom_feuille}': {e}")
+        st.error(f"Erreur lors de la lecture de l'onglet {sheet_name}: {e}")
         return pd.DataFrame()
 
-def sauvegarder_feuille(nom_feuille, dataframe):
-    """Écrase les données de l'onglet par le nouveau dataframe"""
+def save_data(sheet_name, dataframe):
+    """Sauvegarde les données dans un onglet spécifique"""
     try:
-        conn.update(worksheet=nom_feuille, data=dataframe)
+        conn.update(worksheet=sheet_name, data=dataframe)
         return True
     except Exception as e:
-        st.error(f"❌ Échec de l'écriture dans '{nom_feuille}': {e}")
+        st.error(f"Erreur lors de la sauvegarde dans {sheet_name}: {e}")
         return False
 
-def verifier_utilisateur(pseudo, password):
-    """Vérifie si le combo pseudo/pass est dans 'comptes'"""
-    df = charger_feuille("comptes")
-    if not df.empty and "pseudo" in df.columns:
-        res = df[(df['pseudo'].astype(str) == str(pseudo)) & (df['password'].astype(str) == str(password))]
-        return not res.empty
+def check_login(user, pwd):
+    """Vérifie les identifiants"""
+    df = get_data("comptes")
+    if not df.empty:
+        # Conversion en string pour éviter les erreurs de type
+        user_str = str(user)
+        pwd_str = str(pwd)
+        match = df[(df['pseudo'].astype(str) == user_str) & (df['password'].astype(str) == pwd_str)]
+        return not match.empty
     return False
 
-def inscrire_utilisateur(pseudo, password):
-    """Tente d'inscrire un utilisateur s'il n'existe pas"""
-    df = charger_feuille("comptes")
-    if not df.empty and "pseudo" in df.columns:
-        if pseudo.lower() in df['pseudo'].astype(str).str.lower().values:
-            return "existe"
+def signup_user(user, pwd):
+    """Inscrit un nouvel utilisateur"""
+    df = get_data("comptes")
+    if user.lower() in df['pseudo'].astype(str).str.lower().values:
+        return "existe"
     
-    # Création de la nouvelle ligne
-    nouveau_df = pd.DataFrame([{"pseudo": pseudo, "password": str(password)}])
-    final_df = pd.concat([df, nouveau_df], ignore_index=True)
-    
-    if sauvegarder_feuille("comptes", final_df):
-        return "ok"
+    new_user = pd.DataFrame([{"pseudo": user, "password": str(pwd)}])
+    updated_df = pd.concat([df, new_user], ignore_index=True)
+    if save_data("comptes", updated_df):
+        return "succes"
     return "erreur"
 
-def archive_log(user, question, reponse):
-    """Enregistre l'interaction dans l'onglet 'logs'"""
-    df = charger_feuille("logs")
-    maintenant = datetime.now()
-    nouvelle_ligne = pd.DataFrame([{
-        "date": maintenant.strftime("%d/%m/%Y"),
-        "heure": maintenant.strftime("%H:%M"),
+def add_log(user, message, response):
+    """Enregistre une interaction dans les logs"""
+    df = get_data("logs")
+    now = datetime.now()
+    new_log = pd.DataFrame([{
+        "date": now.strftime("%d/%m/%Y"),
+        "heure": now.strftime("%H:%M"),
         "pseudo": user,
-        "message": question,
-        "reponse": reponse
+        "message": message,
+        "reponse": response
     }])
-    updated_logs = pd.concat([df, nouvelle_ligne], ignore_index=True)
-    sauvegarder_feuille("logs", updated_logs)
+    updated_df = pd.concat([df, new_log], ignore_index=True)
+    save_data("logs", updated_df)
 
 # ======================================================
-# 🧠 CŒUR IA (MISTRAL API)
+# 🧠 LOGIQUE IA (MISTRAL)
 # ======================================================
 
-def appeler_hartur(prompt):
-    """Envoie une requête à l'API Mistral"""
-    if not MISTRAL_KEY:
-        return "⚠️ Erreur : La clé API 'MISTRAL_KEY' est absente des secrets Streamlit."
+def ask_hartur(prompt):
+    if not api_key:
+        return "⚠️ Configuration manquante : MISTRAL_KEY non trouvée."
     
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {
         "Content-Type": "application/json",
-        "Authorization": f"Bearer {MISTRAL_KEY}"
+        "Accept": "application/json",
+        "Authorization": f"Bearer {api_key}"
     }
-    corps = {
+    data = {
         "model": "open-mistral-7b",
         "messages": [
-            {"role": "system", "content": "Tu es Hartur, une IA d'élite. Tu es poli et tu donnes des réponses précises."},
+            {"role": "system", "content": "Tu es Hartur, une IA performante. Réponds de façon claire."},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.7
     }
     
     try:
-        r = requests.post(url, headers=headers, json=corps, timeout=15)
-        r.raise_for_status()
-        return r.json()['choices'][0]['message']['content']
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        return response.json()['choices'][0]['message']['content']
     except Exception as e:
-        return f"❌ Erreur de connexion IA : {str(e)}"
+        return f"❌ Erreur IA : {str(e)}"
 
 # ======================================================
-# 🎮 NAVIGATION & ÉTATS DE SESSION
+# 🖥️ NAVIGATION & ÉTATS DE SESSION
 # ======================================================
 
-if "statut" not in st.session_state: st.session_state.statut = "accueil"
-if "user_nom" not in st.session_state: st.session_state.user_nom = None
+if "auth" not in st.session_state: st.session_state.auth = False
+if "user" not in st.session_state: st.session_state.user = None
+if "page" not in st.session_state: st.session_state.page = "accueil"
 
-def change_page(nom_page):
-    st.session_state.statut = nom_page
+def logout():
+    st.session_state.auth = False
+    st.session_state.user = None
+    st.session_state.page = "accueil"
     st.rerun()
 
-# --- BARRE LATÉRALE (SIDEBAR) ---
+# --- BARRE LATÉRALE ---
 with st.sidebar:
-    st.title("🤖 Hartur Control")
-    st.write("---")
-    if st.session_state.user_nom:
-        st.success(f"Connecté : **{st.session_state.user_nom}**")
-        if st.button("🚪 Déconnexion"):
-            st.session_state.user_nom = None
-            change_page("accueil")
+    st.image("https://cdn-icons-png.flaticon.com/512/4712/4712035.png", width=100)
+    st.title("Menu Hartur")
+    
+    if st.session_state.auth:
+        st.write(f"👤 Connecté en tant que : **{st.session_state.user}**")
+        if st.button("Déconnexion"):
+            logout()
     else:
-        st.info("Mode Invité")
-        if st.button("🏠 Retour Accueil"):
-            change_page("accueil")
+        if st.button("🏠 Accueil"):
+            st.session_state.page = "accueil"
+            st.rerun()
     
-    st.write("---")
-    if st.button("🛡️ Administration"):
-        change_page("admin")
+    st.markdown("---")
+    if st.button("🔐 Accès Admin"):
+        st.session_state.page = "admin"
+        st.rerun()
 
-# ======================================================
-# 📑 PAGES DE L'APPLICATION
-# ======================================================
+# --- LOGIQUE DES PAGES ---
 
-# 1. PAGE ACCUEIL (CONNEXION / INSCRIPTION)
-if st.session_state.statut == "accueil":
-    st.title("🚀 Système Central Hartur IA")
-    st.write("Identifiez-vous pour accéder à l'interface de commande.")
+# 1. PAGE ACCUEIL
+if st.session_state.page == "accueil" and not st.session_state.auth:
+    st.title("🤖 Système Hartur IA")
+    st.info("Bienvenue. Veuillez vous connecter ou créer un compte pour accéder à l'IA.")
     
-    col_conn, col_ins = st.columns(2)
+    col1, col2 = st.columns(2)
     
-    with col_conn:
-        st.markdown("### 🔑 Connexion")
-        u_log = st.text_input("Pseudo", key="ul")
-        p_log = st.text_input("Mot de passe", type="password", key="pl")
+    with col1:
+        st.subheader("Connexion")
+        l_user = st.text_input("Pseudo", key="l_u")
+        l_pwd = st.text_input("Mot de passe", type="password", key="l_p")
         if st.button("Se connecter"):
-            if verifier_utilisateur(u_log, p_log):
-                st.session_state.user_nom = u_log
-                change_page("chat")
+            if check_login(l_user, l_pwd):
+                st.session_state.auth = True
+                st.session_state.user = l_user
+                st.session_state.page = "chat"
+                st.success("Connexion réussie !")
+                st.rerun()
             else:
                 st.error("Identifiants incorrects.")
 
-    with col_ins:
-        st.markdown("### 🆕 Inscription")
-        u_reg = st.text_input("Pseudo choisi", key="ur")
-        p_reg = st.text_input("Mot de passe choisi", type="password", key="pr")
-        if st.button("Créer le compte"):
-            if u_reg and p_reg:
-                resultat = inscrire_utilisateur(u_reg, p_reg)
-                if resultat == "ok":
-                    st.success("✅ Compte créé avec succès ! Connectez-vous.")
-                elif resultat == "existe":
-                    st.warning("⚠️ Ce pseudo est déjà utilisé.")
+    with col2:
+        st.subheader("Inscription")
+        s_user = st.text_input("Nouveau Pseudo", key="s_u")
+        s_pwd = st.text_input("Nouveau Mot de passe", type="password", key="s_p")
+        if st.button("Créer mon compte"):
+            if s_user and s_pwd:
+                res = signup_user(s_user, s_pwd)
+                if res == "succes":
+                    st.success("Compte créé ! Connectez-vous à gauche.")
+                elif res == "existe":
+                    st.warning("Ce pseudo est déjà utilisé.")
                 else:
-                    st.error("❌ Erreur technique lors de l'inscription.")
+                    st.error("Erreur lors de l'enregistrement.")
             else:
                 st.error("Veuillez remplir tous les champs.")
 
-# 2. PAGE CHAT (INTERFACE UTILISATEUR)
-elif st.session_state.statut == "chat":
-    if not st.session_state.user_nom:
-        change_page("accueil")
+# 2. PAGE CHAT (Connecté)
+elif st.session_state.auth or st.session_state.page == "chat":
+    st.title(f"💬 Espace de Discussion - {st.session_state.user}")
     
-    st.title(f"💬 Console de Communication : {st.session_state.user_nom}")
+    # Zone d'affichage des messages
+    chat_container = st.container()
     
-    # Zone d'interaction
-    query = st.chat_input("Envoyez un message à Hartur...")
+    # Entrée utilisateur
+    user_query = st.chat_input("Posez votre question à Hartur...")
     
-    if query:
-        # Affichage utilisateur
+    if user_query:
         with st.chat_message("user"):
-            st.markdown(f'<div class="user-msg">{query}</div>', unsafe_allow_html=True)
+            st.write(user_query)
         
-        # Réponse IA
         with st.chat_message("assistant"):
-            with st.spinner("Analyse en cours..."):
-                rep = appeler_hartur(query)
-                st.markdown(f'<div class="bot-msg">{rep}</div>', unsafe_allow_html=True)
-                # Archivage immédiat dans Google Sheets
-                archive_log(st.session_state.user_nom, query, rep)
+            with st.spinner("Hartur réfléchit..."):
+                response = ask_hartur(user_query)
+                st.write(response)
+                # Sauvegarde automatique dans l'onglet logs
+                add_log(st.session_state.user, user_query, response)
 
-# 3. PAGE ADMIN (GESTION & LOGS)
-elif st.session_state.statut == "admin":
-    st.title("🔐 Panneau de Contrôle Administrateur")
-    admin_pass = st.text_input("Entrez le code de sécurité", type="password")
+# 3. PAGE ADMIN
+elif st.session_state.page == "admin":
+    st.title("🔐 Administration du Système")
+    master_key = st.text_input("Code Maître", type="password")
     
-    if admin_pass == "babar":
-        st.success("Accès autorisé.")
-        t1, t2 = st.tabs(["📂 Base Utilisateurs", "📊 Historique Messages"])
+    if master_key == "babar":
+        tab_users, tab_logs = st.tabs(["👥 Gestion Comptes", "📜 Historique Logs"])
         
-        with t1:
-            st.write("### Liste des comptes enregistrés")
-            data_u = charger_feuille("comptes")
-            st.dataframe(data_u, use_container_width=True)
-            if st.button("🔄 Actualiser Comptes"): st.rerun()
-
-        with t2:
-            st.write("### Logs des conversations")
-            data_l = charger_feuille("logs")
-            st.dataframe(data_l, use_container_width=True)
-            if st.button("🔄 Actualiser Logs"): st.rerun()
+        with tab_users:
+            st.subheader("Base de données des utilisateurs")
+            df_u = get_data("comptes")
+            st.dataframe(df_u, use_container_width=True)
             
-    elif admin_pass != "":
-        st.error("Code de sécurité invalide.")
+        with tab_logs:
+            st.subheader("Historique complet des conversations")
+            df_l = get_data("logs")
+            st.dataframe(df_l, use_container_width=True)
+            
+    elif master_key != "":
+        st.error("Code incorrect.")
+        
+    if st.button("Retour à l'accueil"):
+        st.session_state.page = "accueil"
+        st.rerun()
 
 # ======================================================
-# 🏁 PIED DE PAGE
+# PIED DE PAGE
 # ======================================================
-st.write("---")
-st.caption(f"Hartur IA Framework v3.0 | État : Opérationnel | Utilisateur : {st.session_state.user_nom or 'Anonyme'}")
+st.markdown("---")
+st.caption("Hartur IA v2.4 - Système sécurisé par Google Sheets")
