@@ -1,104 +1,107 @@
 import streamlit as st
 import pandas as pd
 import requests
+import os
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="Hartur IA", layout="centered")
-FICHIER = "comptes.csv"
+st.set_page_config(page_title="Hartur", layout="centered")
+FICHIER_COMPTES = "comptes.csv"
+FICHIER_CHAT = "historique.csv"
 
-# Vérification de la clé Mistral
-if "MISTRAL_KEY" in st.secrets:
-    MISTRAL_API_KEY = st.secrets["MISTRAL_KEY"]
-else:
-    st.error("Clé MISTRAL_KEY manquante dans les Secrets Streamlit.")
-    MISTRAL_API_KEY = ""
+# Créer le fichier historique s'il n'existe pas
+if not os.path.exists(FICHIER_CHAT):
+    pd.DataFrame(columns=["pseudo", "role", "content"]).to_csv(FICHIER_CHAT, index=False)
 
-# Fonction pour appeler l'IA Mistral
-def parler_a_ia(message_utilisateur):
+MISTRAL_API_KEY = st.secrets["MISTRAL_KEY"]
+
+# --- PERSONNALITÉ DE HARTUR ---
+def parler_a_ia(prompt, historique_utilisateur):
     url = "https://api.mistral.ai/v1/chat/completions"
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {MISTRAL_API_KEY}"
-    }
-    data = {
-        "model": "mistral-tiny",
-        "messages": [{"role": "user", "content": message_utilisateur}]
-    }
+    headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}"}
+    
+    # On lui donne son "caractère" ici
+    messages = [{"role": "system", "content": "Tu es Hartur. Tu es une présence calme, sérieuse et intuitive. Tu n'es pas un assistant joyeux et robotique. Tu es quelqu'un à qui on peut se confier. Tes réponses sont sincères, posées, et tu ne cherches pas à faire de l'humour inutile."}]
+    
+    # On ajoute l'ancien historique pour qu'elle se souvienne du contexte
+    for m in historique_utilisateur[-5:]: # Elle se souvient des 5 derniers messages
+        messages.append({"role": m["role"], "content": m["content"]})
+    
+    messages.append({"role": "user", "content": prompt})
+    
+    data = {"model": "mistral-small", "messages": messages}
     try:
         response = requests.post(url, json=data, headers=headers)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Désolé, j'ai un petit souci technique pour répondre."
+        return "Je suis là, mais j'ai une petite difficulté technique pour te répondre à l'instant."
 
-# --- LOGIQUE DE SESSION ---
+# --- SESSION ---
 if "user" not in st.session_state:
     st.session_state.user = None
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
 
-# --- INTERFACE PRINCIPALE ---
-st.title("🤖 Hartur IA")
-
+# --- INTERFACE ---
 if st.session_state.user is None:
-    # --- CONNEXION / INSCRIPTION ---
+    st.title("🤖 Hartur")
     menu = st.tabs(["Connexion", "Inscription"])
-    
     with menu[0]:
         p_co = st.text_input("Pseudo", key="p_co")
         m_co = st.text_input("Mot de passe", type="password", key="m_co")
-        if st.button("Se connecter"):
-            df = pd.read_csv(FICHIER)
+        if st.button("Entrer"):
+            df = pd.read_csv(FICHIER_COMPTES)
             if not df.empty and ((df['pseudo'] == p_co) & (df['password'].astype(str) == str(m_co))).any():
                 st.session_state.user = p_co
                 st.rerun()
             else:
                 st.error("Identifiants incorrects.")
-
     with menu[1]:
-        p_ins = st.text_input("Nouveau pseudo", key="p_ins")
-        m_ins = st.text_input("Nouveau mot de passe", type="password", key="m_ins")
-        if st.button("Créer mon compte"):
-            df = pd.read_csv(FICHIER)
-            if p_ins in df['pseudo'].values:
-                st.warning("Pseudo déjà pris.")
+        p_ins = st.text_input("Nouveau pseudo")
+        m_ins = st.text_input("Nouveau mot de passe", type="password")
+        if st.button("Créer le compte"):
+            df = pd.read_csv(FICHIER_COMPTES)
+            if p_ins in df['pseudo'].values: st.warning("Déjà pris.")
             else:
                 nouveau = pd.DataFrame([{"pseudo": p_ins, "password": str(m_ins)}])
-                df = pd.concat([df, nouveau], ignore_index=True)
-                df.to_csv(FICHIER, index=False)
-                st.success("Compte créé ! Connecte-toi maintenant.")
+                pd.concat([df, nouveau]).to_csv(FICHIER_COMPTES, index=False)
+                st.success("Compte créé.")
 
 else:
-    # --- ESPACE CHAT (Connecté) ---
-    st.sidebar.write(f"Connecté en tant que : **{st.session_state.user}**")
-    if st.sidebar.button("Se déconnecter"):
-        st.session_state.user = None
-        st.rerun()
+    # --- ZONE CONNECTÉE ---
+    # Chargement de l'historique depuis le fichier CSV pour cet utilisateur
+    df_chat = pd.read_csv(FICHIER_CHAT)
+    user_chat = df_chat[df_chat['pseudo'] == st.session_state.user]
+    
+    # Barre latérale (Sidebar) pour l'Admin et la Déconnexion
+    with st.sidebar:
+        st.write(f"Utilisateur : **{st.session_state.user}**")
+        if st.button("Se déconnecter"):
+            st.session_state.user = None
+            st.rerun()
+        
+        st.divider()
+        with st.expander("🛡️ Admin"):
+            code = st.text_input("Code", type="password")
+            if code == "1234":
+                st.dataframe(pd.read_csv(FICHIER_COMPTES))
 
-    # Affichage du chat
-    for chat in st.session_state.chat_history:
-        with st.chat_message(chat["role"]):
-            st.write(chat["content"])
+    # Affichage des anciens messages
+    for _, row in user_chat.iterrows():
+        with st.chat_message(row['role']):
+            st.write(row['content'])
 
-    # Zone de saisie
-    prompt = st.chat_input("Pose-moi une question...")
+    # Nouveau message
+    prompt = st.chat_input("Parle-moi...")
     if prompt:
+        # 1. Sauvegarde message utilisateur
         with st.chat_message("user"):
             st.write(prompt)
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        new_row_user = pd.DataFrame([{"pseudo": st.session_state.user, "role": "user", "content": prompt}])
+        new_row_user.to_csv(FICHIER_CHAT, mode='a', header=False, index=False)
         
-        reponse = parler_a_ia(prompt)
+        # 2. Réponse de Hartur
+        historique_pour_ia = user_chat.to_dict('records')
+        reponse = parler_a_ia(prompt, historique_pour_ia)
         
         with st.chat_message("assistant"):
             st.write(reponse)
-        st.session_state.chat_history.append({"role": "assistant", "content": reponse})
-
-# --- SECTION ADMIN (Tout en bas) ---
-st.divider()
-with st.expander("🛡️ Zone Admin"):
-    code_admin = st.text_input("Code secret admin", type="password")
-    if code_admin == "1234":  # Tu peux changer ce code par ce que tu veux
-        st.write("### Liste des utilisateurs inscrits :")
-        df_admin = pd.read_csv(FICHIER)
-        st.dataframe(df_admin)
-    elif code_admin != "":
-        st.error("Code incorrect")
+        new_row_ia = pd.DataFrame([{"pseudo": st.session_state.user, "role": "assistant", "content": reponse}])
+        new_row_ia.to_csv(FICHIER_CHAT, mode='a', header=False, index=False)
