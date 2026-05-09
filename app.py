@@ -1,18 +1,19 @@
 import streamlit as st
 
-# --- CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="HARTUR | SYSTEM", layout="wide", page_icon="🔥")
+# --- RESET CONFIG ---
+st.set_page_config(page_title="HARTUR | NEON SYSTEM", layout="wide")
 
-# --- STYLE CSS (LE CARRÉ NÉON SANS SCROLL) ---
+# --- CSS : LE RETOUR DU NÉON ROUGE ---
 st.markdown("""
     <style>
-    /* On nettoie l'interface Streamlit pour le mode landing */
+    /* Fond noir profond */
     .stApp { background-color: #05070a; }
     header {visibility: hidden;}
+    footer {visibility: hidden;}
     .main .block-container {padding: 0;}
 
-    /* Conteneur plein écran pour centrer la petite fenêtre */
-    .screen-center {
+    /* Centrage vertical et horizontal sans scroll */
+    .viewport {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -20,99 +21,102 @@ st.markdown("""
         width: 100vw;
     }
 
-    /* La petite fenêtre carrée stylée */
-    .hartur-box {
+    /* La petite fenêtre carrée avec le liseré néon rouge */
+    .neon-square {
         background: #0d1117;
-        padding: 40px;
-        border: 2px solid #ff4b4b;
-        border-radius: 15px;
-        box-shadow: 0 0 30px rgba(255, 75, 75, 0.3);
+        padding: 50px;
+        border: 3px solid #ff4b4b; /* Le fameux trait rouge */
+        border-radius: 20px;
+        box-shadow: 0 0 40px rgba(255, 75, 75, 0.6), inset 0 0 15px rgba(255, 75, 75, 0.2);
         text-align: center;
-        max-width: 450px;
-        width: 90%;
+        width: 450px; /* Format carré compact */
     }
 
-    .title {
-        font-size: 55px;
+    .title-neon {
+        font-size: 65px;
         font-weight: 900;
-        letter-spacing: 10px;
+        letter-spacing: 12px;
         color: white;
-        margin-bottom: 5px;
+        margin: 0;
+        text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
     }
 
-    .sub-title {
+    .author {
         color: #58a6ff;
         font-weight: bold;
-        font-size: 14px;
-        text-transform: uppercase;
+        font-size: 16px;
+        margin-top: 10px;
         margin-bottom: 30px;
+        text-transform: uppercase;
+        letter-spacing: 3px;
     }
 
-    .desc {
+    .future-text {
         text-align: left;
         color: #e6edf3;
-        font-size: 17px;
-        line-height: 1.6;
-        margin-bottom: 35px;
+        font-size: 18px;
+        line-height: 1.8;
+        margin-bottom: 40px;
+        padding-left: 20px;
         border-left: 3px solid #ff4b4b;
-        padding-left: 15px;
     }
-    .desc b { color: #ff4b4b; }
+    .future-text b { color: #ff4b4b; }
 
-    /* Bouton LANCER HARTUR */
+    /* Bouton LANCER HARTUR style rouge vibrant */
     div.stButton > button {
         width: 100% !important;
-        background: linear-gradient(90deg, #ff4b4b 0%, #a80000 100%) !important;
+        background: #ff4b4b !important;
         color: white !important;
         border: none !important;
-        padding: 18px !important;
-        font-size: 20px !important;
+        padding: 20px !important;
+        font-size: 22px !important;
         font-weight: 900 !important;
-        border-radius: 8px !important;
-        text-transform: uppercase;
+        border-radius: 12px !important;
+        box-shadow: 0 5px 15px rgba(255, 75, 75, 0.4) !important;
         cursor: pointer;
-        transition: 0.3s;
+        transition: 0.4s;
     }
     div.stButton > button:hover {
-        transform: scale(1.02);
-        box-shadow: 0 0 20px rgba(255, 75, 75, 0.5) !important;
+        background: #ff1f1f !important;
+        box-shadow: 0 0 30px rgba(255, 75, 75, 0.8) !important;
+        transform: scale(1.05);
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- LOGIQUE D'AFFICHAGE ---
-if "access" not in st.session_state:
-    st.session_state.access = False
+# --- NAVIGATION ---
+if "active" not in st.session_state:
+    st.session_state.active = False
 
-# --- 1. LA FENÊTRE DE BIENVENUE ---
-if not st.session_state.access:
-    st.markdown('<div class="screen-center">', unsafe_allow_html=True)
-    st.markdown('<div class="hartur-box">', unsafe_allow_html=True)
+# --- 1. LA LANDING PAGE (SANS SCROLL) ---
+if not st.session_state.active:
+    st.markdown('<div class="viewport">', unsafe_allow_html=True)
+    st.markdown('<div class="neon-square">', unsafe_allow_html=True)
     
-    # Header
-    st.markdown('<div class="title">HARTUR</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-title">SYSTÈME NEURAL PAR ZACMITE</div>', unsafe_allow_html=True)
+    # Titre et Signature
+    st.markdown('<h1 class="title-neon">HARTUR</h1>', unsafe_allow_html=True)
+    st.markdown('<p class="author">Créé par zacmite</p>', unsafe_allow_html=True)
     
     # Description "Claque"
     st.markdown("""
-        <div class="desc">
-            ⚡ <b>Vitesse Brute :</b> Zéro latence, réponse directe.<br>
-            ⚔️ <b>Zéro Filtre :</b> Une liberté totale d'exécution.<br>
-            🧠 <b>Multitâche :</b> Code, analyse et stratégie futuriste.<br>
-            🔥 <b>ADN Ninja :</b> Conçu pour l'efficacité pure.
+        <div class="future-text">
+            ⚡ <b>Vitesse :</b> Réponses instantanées.<br>
+            ⚔️ <b>Filtre :</b> Zéro limite système.<br>
+            🧠 <b>Force :</b> IA optimisée pour l'action.<br>
+            🔥 <b>Style :</b> Le terminal du futur.
         </div>
     """, unsafe_allow_html=True)
     
-    # Bouton de lancement
+    # Bouton Lancer
     if st.button("🚀 LANCER HARTUR"):
-        st.session_state.access = True
+        st.session_state.active = True
         st.rerun()
         
     st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
-# --- 2. LE SITE PRINCIPAL ---
+# --- 2. LE SITE ---
 else:
-    st.title("HARTUR // ACCÈS TOTAL")
-    st.markdown('<p style="color:#58a6ff; font-weight:bold;">CRÉÉ PAR ZACMITE</p>', unsafe_allow_html=True)
-    st.chat_input("Le terminal est à toi...")
+    st.title("HARTUR // CONNECTÉ")
+    st.markdown('<p style="color:#58a6ff;">SYSTEM READY BY ZACMITE</p>', unsafe_allow_html=True)
+    st.chat_input("Initialisation terminée...")
