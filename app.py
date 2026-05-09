@@ -1,115 +1,118 @@
 import streamlit as st
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="HARTUR | ACCUEIL", layout="wide", page_icon="🔥")
+# --- CONFIGURATION DE LA PAGE ---
+st.set_page_config(page_title="HARTUR | SYSTEM", layout="wide", page_icon="🔥")
 
-# --- CSS : CENTRAGE ABSOLU ET SUPPRESSION DU SCROLL ---
+# --- STYLE CSS (LE CARRÉ NÉON SANS SCROLL) ---
 st.markdown("""
     <style>
-    /* 1. On force le fond noir et on cache les éléments inutiles de Streamlit */
+    /* On nettoie l'interface Streamlit pour le mode landing */
     .stApp { background-color: #05070a; }
     header {visibility: hidden;}
-    footer {visibility: hidden;}
     .main .block-container {padding: 0;}
 
-    /* 2. Conteneur qui prend 100% de la hauteur visible de l'écran */
-    .hero-fullscreen {
+    /* Conteneur plein écran pour centrer la petite fenêtre */
+    .screen-center {
         display: flex;
-        flex-direction: column;
         align-items: center;
         justify-content: center;
-        height: 100vh; /* Hauteur totale de la fenêtre */
+        height: 100vh;
         width: 100vw;
-        margin: 0;
     }
-    
-    /* 3. La petite fenêtre néon compacte */
-    .neon-mini-box {
+
+    /* La petite fenêtre carrée stylée */
+    .hartur-box {
         background: #0d1117;
         padding: 40px;
-        border-radius: 15px;
         border: 2px solid #ff4b4b;
-        box-shadow: 0 0 30px rgba(255, 75, 75, 0.4);
+        border-radius: 15px;
+        box-shadow: 0 0 30px rgba(255, 75, 75, 0.3);
         text-align: center;
+        max-width: 450px;
         width: 90%;
-        max-width: 500px; /* On la garde petite et élégante */
     }
-    
-    .title-hartur { 
-        font-size: 60px;
-        font-weight: 900; 
-        letter-spacing: 8px; 
-        color: white; 
-        margin: 0;
-        line-height: 1;
+
+    .title {
+        font-size: 55px;
+        font-weight: 900;
+        letter-spacing: 10px;
+        color: white;
+        margin-bottom: 5px;
     }
-    
-    .signature-zac { 
-        color: #58a6ff; 
-        font-weight: bold; 
-        font-size: 16px; 
-        margin-top: 8px;
+
+    .sub-title {
+        color: #58a6ff;
+        font-weight: bold;
+        font-size: 14px;
         text-transform: uppercase;
+        margin-bottom: 30px;
     }
 
-    .description-claque {
+    .desc {
         text-align: left;
+        color: #e6edf3;
         font-size: 17px;
-        color: #c9d1d9;
-        margin: 25px 0;
         line-height: 1.6;
+        margin-bottom: 35px;
+        border-left: 3px solid #ff4b4b;
+        padding-left: 15px;
     }
-    .description-claque b { color: #ff4b4b; }
+    .desc b { color: #ff4b4b; }
 
-    /* Bouton d'entrée */
+    /* Bouton LANCER HARTUR */
     div.stButton > button {
         width: 100% !important;
-        background: linear-gradient(90deg, #ff4b4b 0%, #8b0000 100%) !important;
+        background: linear-gradient(90deg, #ff4b4b 0%, #a80000 100%) !important;
         color: white !important;
         border: none !important;
-        padding: 15px !important;
+        padding: 18px !important;
         font-size: 20px !important;
         font-weight: 900 !important;
-        border-radius: 10px !important;
+        border-radius: 8px !important;
+        text-transform: uppercase;
         cursor: pointer;
+        transition: 0.3s;
+    }
+    div.stButton > button:hover {
+        transform: scale(1.02);
+        box-shadow: 0 0 20px rgba(255, 75, 75, 0.5) !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- NAVIGATION ---
-if "site_access" not in st.session_state:
-    st.session_state.site_access = False
+# --- LOGIQUE D'AFFICHAGE ---
+if "access" not in st.session_state:
+    st.session_state.access = False
 
-# --- 1. AFFICHAGE DE LA FENÊTRE (SANS SCROLL) ---
-if not st.session_state.site_access:
-    # On utilise le div plein écran pour centrer la box
-    st.markdown('<div class="hero-fullscreen">', unsafe_allow_html=True)
+# --- 1. LA FENÊTRE DE BIENVENUE ---
+if not st.session_state.access:
+    st.markdown('<div class="screen-center">', unsafe_allow_html=True)
+    st.markdown('<div class="hartur-box">', unsafe_allow_html=True)
     
-    st.markdown('<div class="neon-mini-box">', unsafe_allow_html=True)
+    # Header
+    st.markdown('<div class="title">HARTUR</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">SYSTÈME NEURAL PAR ZACMITE</div>', unsafe_allow_html=True)
     
-    # Contenu de la box
-    st.markdown('<h1 class="title-hartur">HARTUR</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="signature-zac">Créé par zacmite</p>', unsafe_allow_html=True)
-    
+    # Description "Claque"
     st.markdown("""
-        <div class="description-claque">
-            🚀 <b>Vitesse :</b> Réponses instantanées.<br>
-            ⚔️ <b>Filtre :</b> Zéro barrière, 100% efficace.<br>
-            🧠 <b>Intelligence :</b> Ton pote IA du futur.<br>
-            🔥 <b>Style :</b> Un terminal brut et puissant.
+        <div class="desc">
+            ⚡ <b>Vitesse Brute :</b> Zéro latence, réponse directe.<br>
+            ⚔️ <b>Zéro Filtre :</b> Une liberté totale d'exécution.<br>
+            🧠 <b>Multitâche :</b> Code, analyse et stratégie futuriste.<br>
+            🔥 <b>ADN Ninja :</b> Conçu pour l'efficacité pure.
         </div>
     """, unsafe_allow_html=True)
     
-    if st.button("Lancer le terminal"):
-        st.session_state.site_access = True
+    # Bouton de lancement
+    if st.button("🚀 LANCER HARTUR"):
+        st.session_state.access = True
         st.rerun()
         
-    st.markdown('</div>', unsafe_allow_html=True) # Fin box
-    st.markdown('</div>', unsafe_allow_html=True) # Fin fullscreen
+    st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
-# --- 2. ACCÈS AU SITE ---
+# --- 2. LE SITE PRINCIPAL ---
 else:
-    st.title("HARTUR // TERMINAL")
-    st.markdown('<p class="signature-zac" style="text-align:left;">Créé par zacmite</p>', unsafe_allow_html=True)
-    st.chat_input("Le système est prêt...")
+    st.title("HARTUR // ACCÈS TOTAL")
+    st.markdown('<p style="color:#58a6ff; font-weight:bold;">CRÉÉ PAR ZACMITE</p>', unsafe_allow_html=True)
+    st.chat_input("Le terminal est à toi...")
