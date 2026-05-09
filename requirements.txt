@@ -1,4 +1,4 @@
 streamlit
 pandas
 requests
-mistralai
+mistralai>=1.0.0
