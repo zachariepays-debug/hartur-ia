@@ -15,27 +15,26 @@ MASTER_CODE = "babar"
 
 st.set_page_config(page_title="HARTUR | OS", layout="wide", page_icon="💀")
 
-# --- DESIGN & CENTRAGE ---
+# --- DESIGN & NETTOYAGE ---
 st.markdown("""
     <style>
     .stApp { background-color: #030507; color: #e6edf3; }
     header { visibility: hidden; }
     
-    /* Header synchronisé */
-    .header-box { text-align: center; padding: 40px 0 10px 0; }
-    .giant-title { font-size: 60px; font-weight: 900; letter-spacing: 15px; color: white; margin: 0; }
-    .hook-text { color: #8b949e; font-size: 16px; letter-spacing: 4px; }
-    .signature-zac { color: #ff4b4b; font-size: 13px; letter-spacing: 5px; font-weight: 900; }
+    /* Centrage du Header */
+    .header-box { text-align: center; padding: 30px 0 10px 0; }
+    .giant-title { font-size: 55px; font-weight: 900; letter-spacing: 12px; color: white; margin: 0; }
+    .signature-zac { color: #ff4b4b; font-size: 12px; letter-spacing: 4px; font-weight: 900; margin-bottom: 20px; }
 
-    /* Admin en haut à droite */
-    .admin-anchor { position: fixed; top: 20px; right: 20px; z-index: 1000; }
+    /* Bouton Admin à droite */
+    .admin-anchor { position: fixed; top: 50%; right: 20px; transform: translateY(-50%); z-index: 1000; }
     
-    /* Pavé de connexion plus haut */
-    .stTabs { margin-top: -20px; }
+    /* Cacher le header quand on discute */
+    .chat-mode .header-box { display: none; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FONCTIONS GITHUB (PERSISTENCE) ---
+# --- FONCTIONS GITHUB ---
 def charger_data(chemin):
     url = f"https://api.github.com/repos/{REPO_NOM}/contents/{chemin}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
@@ -55,69 +54,91 @@ def push_github(chemin, contenu, msg, sha=None):
 # --- INITIALISATION ---
 if "user" not in st.session_state: st.session_state.user = None
 if "admin_mode" not in st.session_state: st.session_state.admin_mode = False
+if "messages" not in st.session_state: st.session_state.messages = []
 
-# --- AFFICHAGE DU HEADER ---
-st.markdown('<div class="header-box"><h1 class="giant-title">HARTUR</h1><p class="hook-text">SYSTÈME NEURAL AVANCÉ</p><p class="signature-zac">CRÉÉ PAR ZACMITE</p></div>', unsafe_allow_html=True)
+# --- BOUTON ADMIN (CÔTÉ DROIT) ---
+if not st.session_state.admin_mode:
+    st.markdown('<div class="admin-anchor">', unsafe_allow_html=True)
+    if st.button("⚙️"):
+        st.session_state.show_admin_input = not st.session_state.get("show_admin_input", False)
+    st.markdown('</div>', unsafe_allow_html=True)
 
-# --- BOUTON ADMIN (GOD MODE) ---
-st.markdown('<div class="admin-anchor">', unsafe_allow_html=True)
-if st.button("⚙️"):
-    st.session_state.show_admin_login = not st.session_state.get("show_admin_login", False)
-st.markdown('</div>', unsafe_allow_html=True)
-
-if st.session_state.get("show_admin_login"):
+if st.session_state.get("show_admin_input"):
     with st.sidebar:
-        st.title("🛡️ ZONE ADMIN")
-        cl_admin = st.text_input("Code Maître", type="password")
-        if cl_admin == MASTER_CODE:
+        code = st.text_input("CODE ADMIN", type="password")
+        if code == MASTER_CODE:
             st.session_state.admin_mode = True
-            st.success("Accès God Mode activé")
+            st.rerun()
 
-# --- LOGIQUE DE NAVIGATION ---
+# --- NAVIGATION ---
 
-# 1. SI ADMIN ACTIVÉ
+# 1. COIN ADMIN
 if st.session_state.admin_mode:
-    st.subheader("🛠️ Panneau de contrôle")
-    if st.button("Quitter le mode Admin"):
+    st.title("🛠️ COIN ADMIN")
+    if st.button("RETOUR"):
         st.session_state.admin_mode = False
         st.rerun()
-    # Ici tu retrouveras tes dossiers de comptes et conversations
+    # Dossiers de gestion
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("📁 Comptes")
+        raw, _ = charger_data(FICHIER_COMPTES)
+        if raw: st.dataframe(pd.read_csv(StringIO(raw)))
+    with col2:
+        st.subheader("📁 Historiques")
+        # Affichage des convs GitHub
 
-# 2. SI UTILISATEUR CONNECTÉ
+# 2. ESPACE CHAT (ÉPURÉ)
 elif st.session_state.user:
-    st.chat_input(f"HARTUR t'écoute, {st.session_state.user}...")
-    if st.sidebar.button("Déconnexion"):
+    # On vide l'écran du titre pour la discussion
+    st.markdown('<div class="chat-mode"></div>', unsafe_allow_html=True)
+    
+    if st.sidebar.button("Se déconnecter"):
         st.session_state.user = None
+        st.session_state.messages = []
         st.rerun()
 
-# 3. ÉCRAN D'ACCUEIL (CONNEXION & INSCRIPTION LIBRE)
+    # Affichage de la discussion style "Messenger/WhatsApp"
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.write(m["content"])
+
+    if prompt := st.chat_input("Dis-moi tout..."):
+        # Ajout message user
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.write(prompt)
+        
+        # Réponse HARTUR (Personnalité de confident)
+        with st.chat_message("assistant"):
+            response = f"Écoute, je t'ai bien reçu. Tu me dis '{prompt}', voilà ce que j'en pense..." 
+            st.write(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+
+# 3. ÉCRAN D'ACCUEIL (CONNEXION)
 else:
+    st.markdown('<div class="header-box"><h1 class="giant-title">HARTUR</h1><p class="signature-zac">CRÉÉ PAR ZACMITE</p></div>', unsafe_allow_html=True)
+    
     col1, col2, col3 = st.columns([1, 1.5, 1])
     with col2:
         t1, t2 = st.tabs(["CONNEXION", "S'INSCRIRE"])
-        
         with t1:
-            u = st.text_input("Pseudo", key="log_u")
-            p = st.text_input("Mot de passe", type="password", key="log_p")
-            if st.button("CONNEXION"):
+            u = st.text_input("Pseudo")
+            p = st.text_input("Mot de passe", type="password")
+            if st.button("ENTRER"):
                 raw, _ = charger_data(FICHIER_COMPTES)
                 df = pd.read_csv(StringIO(raw)) if raw else pd.DataFrame(columns=["pseudo", "password"])
                 if not df[(df['pseudo'] == u) & (df['password'] == p)].empty:
                     st.session_state.user = u
                     st.rerun()
-                else: st.error("Identifiants inconnus.")
-
+                else: st.error("Accès refusé.")
         with t2:
-            st.markdown("### Créer ton accès")
-            new_u = st.text_input("Choisis un Pseudo")
-            new_p = st.text_input("Choisis un Mot de passe", type="password")
-            if st.button("CRÉER MON COMPTE"):
+            new_u = st.text_input("Nouveau Pseudo")
+            new_p = st.text_input("Nouveau Mot de passe", type="password")
+            if st.button("VALIDER L'INSCRIPTION"):
                 raw, sha = charger_data(FICHIER_COMPTES)
                 df = pd.read_csv(StringIO(raw)) if raw else pd.DataFrame(columns=["pseudo", "password"])
-                if new_u in df['pseudo'].values:
-                    st.error("Ce pseudo est déjà pris.")
-                elif new_u and new_p:
-                    new_row = pd.DataFrame({"pseudo": [new_u], "password": [new_p]})
-                    df = pd.concat([df, new_row], ignore_index=True)
-                    push_github(FICHIER_COMPTES, df.to_csv(index=False), f"Nouvel inscrit: {new_u}", sha)
-                    st.success("Compte créé ! Tu peux maintenant te connecter.")
+                if new_u and new_p and new_u not in df['pseudo'].values:
+                    new_df = pd.concat([df, pd.DataFrame({"pseudo":[new_u], "password":[new_p]})])
+                    push_github(FICHIER_COMPTES, new_df.to_csv(index=False), f"Inscrit: {new_u}", sha)
+                    st.success("Compte créé, connecte-toi !")
