@@ -241,3 +241,94 @@ elif st.session_state.page_actuelle == "admin":
 # Pied de page
 st.write("---")
 st.caption("Hartur IA v3.1 | Opérationnel")
+import streamlit as st
+from streamlit_gsheets import GSheetsConnection
+import pandas as pd
+import requests
+from datetime import datetime
+
+# --- CONFIGURATION ---
+st.set_page_config(page_title="Hartur IA", layout="wide")
+
+# --- CONNEXION ---
+# On crée la connexion une seule fois pour toute l'app
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+def lire_donnees(onglet):
+    try:
+        # Utilisation de la méthode simple sans arguments complexes
+        return conn.read(worksheet=onglet, ttl=0)
+    except:
+        return pd.DataFrame()
+
+def ecrire_donnees(onglet, df):
+    try:
+        conn.update(worksheet=onglet, data=df)
+        return True
+    except Exception as e:
+        st.error(f"Erreur de sauvegarde : {e}")
+        return False
+
+# --- LOGIQUE IA ---
+def demander_ia(prompt):
+    key = st.secrets.get("MISTRAL_KEY")
+    if not key: return "Erreur : Clé API manquante."
+    url = "https://api.mistral.ai/v1/chat/completions"
+    headers = {"Authorization": f"Bearer {key}"}
+    data = {
+        "model": "open-mistral-7b",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    try:
+        r = requests.post(url, headers=headers, json=data)
+        return r.json()['choices'][0]['message']['content']
+    except:
+        return "IA indisponible."
+
+# --- NAVIGATION ---
+if "user" not in st.session_state: st.session_state.user = None
+
+if st.session_state.user is None:
+    st.title("🚀 Inscription / Connexion")
+    pseudo = st.text_input("Pseudo")
+    mdp = st.text_input("Mot de passe", type="password")
+    
+    if st.button("Créer un compte"):
+        df = lire_donnees("comptes")
+        if not df.empty and pseudo in df['pseudo'].values:
+            st.warning("Pseudo déjà pris.")
+        else:
+            nouveau_compte = pd.DataFrame([{"pseudo": pseudo, "password": str(mdp)}])
+            # On fusionne et on sauvegarde
+            if ecrire_donnees("comptes", pd.concat([df, nouveau_compte], ignore_index=True)):
+                st.success("Compte créé ! Connectez-vous.")
+
+    if st.button("Se connecter"):
+        df = lire_donnees("comptes")
+        if not df.empty and ((df['pseudo'] == pseudo) & (df['password'] == str(mdp))).any():
+            st.session_state.user = pseudo
+            st.rerun()
+        else:
+            st.error("Identifiants incorrects.")
+
+else:
+    st.title(f"💬 Chat avec Hartur ({st.session_state.user})")
+    if st.button("Déconnexion"):
+        st.session_state.user = None
+        st.rerun()
+    
+    prompt = st.chat_input("Votre message...")
+    if prompt:
+        st.write(f"**Vous:** {prompt}")
+        reponse = demander_ia(prompt)
+        st.write(f"**Hartur:** {reponse}")
+        
+        # Log du message
+        df_logs = lire_donnees("logs")
+        nouveau_log = pd.DataFrame([{
+            "date": datetime.now().strftime("%d/%m/%Y"),
+            "pseudo": st.session_state.user,
+            "message": prompt,
+            "reponse": reponse
+        }])
+        ecrire_donnees("logs", pd.concat([df_logs, nouveau_log], ignore_index=True))
