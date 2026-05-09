@@ -2,7 +2,10 @@ import os
 import subprocess
 import sys
 
-# --- RÉPARATEUR DE DÉPENDANCES ---
+# ==========================================
+# 🛡️ FORCEUR D'INSTALLATION (PLAN B EXTRÊME)
+# ==========================================
+# Si Streamlit ignore ton requirements.txt, ce code installe Mistral de force.
 try:
     from mistralai import Mistral
 except ImportError:
@@ -17,8 +20,9 @@ import json
 from io import StringIO
 
 # ==========================================
-# ⚙️ RÉCUPÉRATION DES SECRETS
+# ⚙️ CONFIGURATION & SECRETS
 # ==========================================
+# On utilise tes secrets configurés pour éviter toute erreur [7]
 REPO_NOM = "zachariepays-debug/Hartur-ia" 
 MISTRAL_KEY = st.secrets["MISTRAL_KEY"]
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
@@ -27,7 +31,7 @@ client = Mistral(api_key=MISTRAL_KEY)
 
 st.set_page_config(page_title="HARTUR | NEURAL OS", layout="wide")
 
-# STYLE : Noir & Vert (Identité réelle forcée)
+# DESIGN : Noir, Vert (HARTUR) et Blanc (TOI)
 st.markdown("""
     <style>
     .stApp { background-color: #000000; color: #00FF41; font-family: 'Courier New', monospace; }
@@ -37,53 +41,89 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# FONCTION DE SYNCHRONISATION GITHUB
 def sync_github(chemin, method="GET", content=None, sha=None):
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     url = f"https://api.github.com/repos/{REPO_NOM}/contents/{chemin}"
-    if method == "GET":
-        r = requests.get(url, headers=headers)
-        if r.status_code == 200:
-            j = r.json()
-            return base64.b64decode(j['content']).decode('utf-8'), j['sha']
-        return None, None
-    else:
-        payload = {"message": "SYNC", "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')}
-        if sha: payload["sha"] = sha
-        requests.put(url, headers=headers, data=json.dumps(payload))
+    try:
+        if method == "GET":
+            r = requests.get(url, headers=headers)
+            if r.status_code == 200:
+                j = r.json()
+                return base64.b64decode(j['content']).decode('utf-8'), j['sha']
+            return None, None
+        else:
+            payload = {"message": "HARTUR_UPDATE", "content": base64.b64encode(content.encode('utf-8')).decode('utf-8')}
+            if sha: payload["sha"] = sha
+            requests.put(url, headers=headers, data=json.dumps(payload))
+            return None, None
+    except:
         return None, None
 
 # ==========================================
-# 🔐 GESTION SESSION
+# 🔐 SYSTÈME D'IDENTITÉ (ADIEU LE [7])
 # ==========================================
 if "user" not in st.session_state: st.session_state.user = None
 if "admin_mode" not in st.session_state: st.session_state.admin_mode = False
 
-if st.session_state.admin_mode:
-    st.title("🛠️ MASTER CONTROL")
-    c_data, _ = sync_github("conversations.json")
-    all_chats = json.loads(c_data) if c_data else {}
+# ÉCRAN DE CONNEXION
+if not st.session_state.user and not st.session_state.admin_mode:
+    st.markdown('<h1 style="text-align:center;">HARTUR LOGIN</h1>', unsafe_allow_html=True)
+    u = st.text_input("IDENTIFIANT")
+    p = st.text_input("MOT DE PASSE", type="password")
     
-    for u_n, msgs in all_chats.items():
-        st.subheader(f"Unité : {u_n}") # Affiche ton pseudo au lieu de [7]
-        for m in msgs[::-1]:
+    if st.button("ACCÉDER AU FLUX"):
+        if u == "6" and p == "6":
+            st.session_state.admin_mode = True
+            st.rerun()
+        else:
+            # Ici on valide ton nom zachariepays-debug
+            st.session_state.user = u
+            st.session_state.msgs = []
+            st.rerun()
+
+# INTERFACE ADMIN (FLUX NEURAL)
+elif st.session_state.admin_mode:
+    st.title("🛠️ MASTER CONTROL")
+    c_raw, _ = sync_github("conversations.json")
+    all_chats = json.loads(c_raw) if c_raw else {}
+    
+    for user_id, messages in all_chats.items():
+        st.subheader(f"Canal : {user_id}")
+        for m in messages[::-1]:
             cl = "user-msg" if m['role'] == 'user' else "hartur-msg"
-            nom = u_n if m['role'] == 'user' else "HARTUR"
+            nom = user_id if m['role'] == 'user' else "HARTUR"
             st.markdown(f"<div class='{cl}'>{nom} : {m['content']}</div>", unsafe_allow_html=True)
-        st.divider()
-    if st.button("QUITTER"): st.session_state.admin_mode = False; st.rerun()
+    
+    if st.sidebar.button("DÉCONNEXION"):
+        st.session_state.admin_mode = False
+        st.rerun()
 
-elif st.session_state.user:
-    st.write(f"Connecté en tant que : **{st.session_state.user}**")
-    if prompt := st.chat_input("..."):
-        # Logique Mistral ici...
-        st.session_state.msgs.append({"role": "user", "content": prompt})
-        res = client.chat.complete(model="mistral-large-latest", messages=[{"role":"user","content":prompt}])
-        st.write(res.choices[0].message.content)
-
+# INTERFACE UTILISATEUR
 else:
-    u = st.text_input("NOM")
-    p = st.text_input("CODE", type="password")
-    if st.button("DÉVERROUILLER"):
-        if u == "6" and p == "6": st.session_state.admin_mode = True; st.rerun()
-        st.session_state.user = u
+    st.title(f"HARTUR v3 | {st.session_state.user}")
+    
+    for m in st.session_state.msgs:
+        with st.chat_message(m["role"]): st.write(m["content"])
+
+    if prompt := st.chat_input("Transmettre au réseau..."):
+        st.session_state.msgs.append({"role": "user", "content": prompt})
+        
+        # Appel Mistral
+        try:
+            res = client.chat.complete(
+                model="mistral-large-latest",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            reponse = res.choices[0].message.content
+        except:
+            reponse = "ERREUR DE LIAISON NEURALE."
+
+        st.session_state.msgs.append({"role": "assistant", "content": reponse})
+        
+        # Sauvegarde sur GitHub
+        raw_c, sha_c = sync_github("conversations.json")
+        data = json.loads(raw_c) if raw_c else {}
+        data[st.session_state.user] = st.session_state.msgs
+        sync_github("conversations.json", "PUT", json.dumps(data), sha_c)
         st.rerun()
