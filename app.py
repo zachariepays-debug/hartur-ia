@@ -5,18 +5,18 @@ import base64
 import json
 from io import StringIO
 
-# --- CONFIGURATION À MODIFIER ---
-# REMPLACE BIEN ICI PAR TON PSEUDO ET LE NOM DE TON PROJET GITHUB
-# Exemple: "Zach/hartur-ia"
-REPO_NOM = "TON_PSEUDO/TON_PROJET" 
+# --- CONFIGURATION AUTOMATIQUE ---
+REPO_NOM = "zachariepays-debug/Hartur-ia" 
+FICHIER_HIST = "historique.csv"
+FICHIER_COMPTES = "comptes.csv"
 
-# On récupère tes clés que tu as mises dans les Secrets
+# Récupération des clés dans les Secrets Streamlit
 MISTRAL_API_KEY = st.secrets["MISTRAL_KEY"]
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
 st.set_page_config(page_title="Hartur", layout="centered")
 
-# --- FONCTIONS POUR GITHUB ---
+# --- FONCTIONS GITHUB (SAUVEGARDE ÉTERNELLE) ---
 
 def lire_csv_github(nom_fichier):
     url = f"https://api.github.com/repos/{REPO_NOM}/contents/{nom_fichier}"
@@ -33,20 +33,22 @@ def ecrire_csv_github(nom_fichier, df, sha):
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
     csv_content = df.to_csv(index=False)
     encoded = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
+    
     data = {
-        "message": "Sauvegarde automatique Hartur",
+        "message": "Mise à jour historique par Hartur",
         "content": encoded,
         "sha": sha
     }
     requests.put(url, data=json.dumps(data), headers=headers)
 
-# --- FONCTION IA (TON POTE HARTUR) ---
+# --- FONCTION IA ---
 def parler_a_ia(prompt, historique):
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}"}
-    system_msg = "Tu es Hartur, un pote proche. Pas de politesse, sois direct, un peu vulgaire si besoin mais reste cool. Tu es là pour qu'on se confie à toi."
     
+    system_msg = "Tu es Hartur, un pote proche. Parle normalement, sois direct, un peu brut mais toujours là pour écouter. Pas de politesse forcée, sois vrai."
     messages = [{"role": "system", "content": system_msg}]
+    
     for m in historique[-6:]:
         messages.append({"role": m["role"], "content": m["content"]})
     messages.append({"role": "user", "content": prompt})
@@ -55,9 +57,9 @@ def parler_a_ia(prompt, historique):
         response = requests.post(url, json={"model": "mistral-small", "messages": messages}, headers=headers)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Gros, j'ai un bug technique là."
+        return "Désolé gros, j'ai un bug de connexion à l'IA."
 
-# --- INTERFACE ---
+# --- LOGIQUE DE SESSION ---
 if "user" not in st.session_state:
     st.session_state.user = None
 
@@ -66,16 +68,17 @@ if st.session_state.user is None:
     p_co = st.text_input("Pseudo")
     m_co = st.text_input("Mot de passe", type="password")
     if st.button("Se connecter"):
-        df_comptes, _ = lire_csv_github("comptes.csv")
-        if not df_comptes.empty and ((df_comptes['pseudo'] == p_co) & (df_comptes['password'].astype(str) == str(m_co))).any():
+        df_comptes, _ = lire_csv_github(FICHIER_COMPTES)
+        if not df_comptes.empty and ((df_comptes['pseudo'].astype(str) == str(p_co)) & (df_comptes['password'].astype(str) == str(m_co))).any():
             st.session_state.user = p_co
             st.rerun()
         else:
             st.error("Inconnu, t'es qui ?")
 else:
-    # On charge l'historique depuis GitHub
-    df_glob, sha_glob = lire_csv_github("historique.csv")
-    user_hist = df_glob[df_glob['pseudo'] == st.session_state.user]
+    # Charger l'historique
+    df_glob, sha_glob = lire_csv_github(FICHIER_HIST)
+    user_hist_df = df_glob[df_glob['pseudo'] == st.session_state.user]
+    user_hist_list = user_hist_df.to_dict('records')
 
     with st.sidebar:
         st.write(f"Utilisateur : **{st.session_state.user}**")
@@ -85,33 +88,33 @@ else:
         st.divider()
         with st.expander("🛡️ Admin"):
             if st.text_input("Code", type="password") == "1234":
-                st.write("Historique complet :")
                 st.dataframe(df_glob)
 
-    st.title("Discussion avec Hartur")
+    st.title("Discussion")
 
-    for _, row in user_hist.iterrows():
-        with st.chat_message(row['role']):
-            st.write(row['content'])
+    for msg in user_hist_list:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
 
     prompt = st.chat_input("Dis-moi tout...")
     if prompt:
         with st.chat_message("user"):
             st.write(prompt)
         
-        # Sauvegarde utilisateur sur GitHub
+        # 1. Sauvegarde utilisateur
         new_row = pd.DataFrame([{"pseudo": st.session_state.user, "role": "user", "content": prompt}])
         df_glob = pd.concat([df_glob, new_row], ignore_index=True)
-        ecrire_csv_github("historique.csv", df_glob, sha_glob)
+        ecrire_csv_github(FICHIER_HIST, df_glob, sha_glob)
         
-        # Récupération de la réponse IA
-        reponse = parler_a_ia(prompt, user_hist.to_dict('records'))
+        # 2. Récupérer nouveau SHA pour la réponse IA
+        _, sha_neuf = lire_csv_github(FICHIER_HIST)
         
+        # 3. Réponse IA
+        reponse = parler_a_ia(prompt, user_hist_list)
         with st.chat_message("assistant"):
             st.write(reponse)
-        
-        # On reprend le SHA tout neuf pour enregistrer la réponse de l'IA
-        _, sha_neuf = lire_csv_github("historique.csv")
+            
+        # 4. Sauvegarde réponse IA
         new_row_ia = pd.DataFrame([{"pseudo": st.session_state.user, "role": "assistant", "content": reponse}])
         df_glob = pd.concat([df_glob, new_row_ia], ignore_index=True)
-        ecrire_csv_github("historique.csv", df_glob, sha_neuf)
+        ecrire_csv_github(FICHIER_HIST, df_glob, sha_neuf)
