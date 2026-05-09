@@ -11,82 +11,136 @@ FICHIER_COMPTES = "comptes.csv"
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 MASTER_CODE = "babar"
 
-st.set_page_config(page_title="HARTUR | SYSTEM", layout="wide", page_icon="🔥")
+st.set_page_config(page_title="HARTUR | PROJET X", layout="wide", page_icon="⚡")
 
-# --- CSS : CENTRAGE ET BOUTON INTÉGRÉ ---
+# --- CSS : L'INTERFACE DU FUTUR (PREMIER PLAN TOTAL) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #05070a; color: #e6edf3; }
+    .stApp { background-color: #05070a; }
     
-    .welcome-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.95); z-index: 9999;
-        display: flex; align-items: center; justify-content: center;
+    /* Overlay qui recouvre TOUT au premier plan */
+    .future-overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100vw; height: 100vh;
+        background: radial-gradient(circle at center, #0d1117 0%, #000000 100%);
+        z-index: 999999; /* Priorité absolue */
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
     
-    .neon-box {
-        background: #0d1117; padding: 60px; border-radius: 20px;
-        border: 2px solid #ff4b4b; width: 85%; max-width: 800px;
-        text-align: center; box-shadow: 0px 0px 50px rgba(255, 75, 75, 0.4);
-        display: flex; flex-direction: column; align-items: center;
+    /* La fenêtre Néon centrée */
+    .neon-card {
+        background: rgba(13, 17, 23, 0.9);
+        padding: 60px;
+        border-radius: 20px;
+        border: 2px solid #ff4b4b;
+        box-shadow: 0 0 50px rgba(255, 75, 75, 0.3);
+        text-align: center;
+        max-width: 800px;
+        width: 90%;
+        backdrop-filter: blur(10px);
     }
     
-    .giant-title { font-size: 70px; font-weight: 900; letter-spacing: 12px; color: white; margin: 0; }
-    .signature-zac { color: #58a6ff; font-weight: bold; font-size: 20px; margin-top: 5px; margin-bottom: 30px; }
+    /* Centrage parfait du bloc Titre */
+    .hero-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 40px;
+    }
+    
+    .giant-title { 
+        font-size: clamp(50px, 8vw, 85px);
+        font-weight: 900;
+        letter-spacing: 15px;
+        color: white;
+        text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+        margin: 0;
+        line-height: 1;
+    }
+    
+    .signature-zac { 
+        color: #58a6ff;
+        font-weight: bold;
+        font-size: 22px;
+        margin-top: 15px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+    }
 
-    .description-text { font-size: 19px; line-height: 1.8; color: #c9d1d9; margin-bottom: 40px; text-align: left; }
-    .description-text b { color: #ff4b4b; }
+    /* Description "Claque" */
+    .future-desc {
+        text-align: left;
+        font-size: 20px;
+        color: #e6edf3;
+        line-height: 1.6;
+        margin-bottom: 45px;
+        border-left: 3px solid #ff4b4b;
+        padding-left: 25px;
+    }
+    .future-desc b { color: #ff4b4b; text-transform: uppercase; }
 
-    /* Style du bouton Streamlit pour qu'il s'intègre parfaitement */
+    /* Bouton d'entrée Magistral */
     .stButton > button {
         width: 100% !important;
-        background: linear-gradient(90deg, #ff4b4b, #8b0000) !important;
-        color: white !important; border: none !important;
-        padding: 20px !important; font-size: 24px !important;
-        font-weight: 900 !important; border-radius: 12px !important;
-        box-shadow: 0px 10px 30px rgba(255, 75, 75, 0.3) !important;
+        background: linear-gradient(90deg, #ff4b4b 0%, #8b0000 100%) !important;
+        color: white !important;
+        border: none !important;
+        padding: 25px !important;
+        font-size: 26px !important;
+        font-weight: 900 !important;
+        border-radius: 15px !important;
+        box-shadow: 0 10px 40px rgba(255, 75, 75, 0.5) !important;
+        transition: 0.4s;
+        cursor: pointer;
+        text-transform: uppercase;
+    }
+    .stButton > button:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 50px rgba(255, 75, 75, 0.8) !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- INITIALISATION ---
-if "launched" not in st.session_state: st.session_state.launched = False
-if "user" not in st.session_state: st.session_state.user = None
+# --- ÉTATS ---
+if "access_granted" not in st.session_state:
+    st.session_state.access_granted = False
 
-# --- 1. L'AFFICHE NÉON AVEC BOUTON INTERNE ---
-if not st.session_state.launched:
-    # On crée la structure de la box
-    with st.container():
-        st.markdown('<div class="welcome-overlay">', unsafe_allow_html=True)
-        st.markdown('<div class="neon-box">', unsafe_allow_html=True)
+# --- 1. L'ENTRÉE DANS LE FUTUR ---
+if not st.session_state.access_granted:
+    # On enferme tout dans l'overlay
+    st.markdown('<div class="future-overlay">', unsafe_allow_html=True)
+    st.markdown('<div class="neon-card">', unsafe_allow_html=True)
+    
+    # Bloc Titre + Signature (Alignement parfait)
+    st.markdown("""
+        <div class="hero-section">
+            <h1 class="giant-title">HARTUR</h1>
+            <p class="signature-zac">Créé par zacmite</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Description "Futuriste"
+    st.markdown("""
+        <div class="future-desc">
+            🧬 <b>Système Neural :</b> Une IA ninja optimisée pour la vitesse pure.<br>
+            ⚔️ <b>Zéro Limite :</b> Précision chirurgicale, sans aucune censure.<br>
+            📡 <b>Omniprésence :</b> Code, stratégie, et analyse en temps réel.<br>
+            🔥 <b>Impact Brut :</b> Conçu pour ceux qui n'ont pas de temps à perdre.
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Bouton de sortie intégré à la fenêtre
+    if st.button("Initialiser la connexion"):
+        st.session_state.access_granted = True
+        st.rerun()
         
-        # Titre et Signature centrés
-        st.markdown('<h1 class="giant-title">HARTUR</h1>', unsafe_allow_html=True)
-        st.markdown('<p class="signature-zac">Créé par zacmite</p>', unsafe_allow_html=True)
-        
-        # Description complète
-        st.markdown("""
-            <div class="description-text">
-                🚀 <b>Vitesse Extrême :</b> Réponses instantanées.<br>
-                🛡️ <b>Sécurité Totale :</b> Cryptage de vos données.<br>
-                🧠 <b>IA Multi-Tâches :</b> Expert en code et rédaction.<br>
-                🔥 <b>Pote du Futur :</b> Efficacité brute sans blabla.<br>
-                ⚡ <b>Liberté :</b> Aucune restriction système.
-            </div>
-        """, unsafe_allow_html=True)
-        
-        # LE BOUTON EST ICI, DANS LA BOX
-        if st.button("🚀 LANCER L'AVENTURE"):
-            st.session_state.launched = True
-            st.rerun()
-            
-        st.markdown('</div></div>', unsafe_allow_html=True)
-    st.stop()
+    st.markdown('</div></div>', unsafe_allow_html=True)
+    st.stop() # Bloque tout le reste tant que pas cliqué
 
-# --- 2. RESTE DU SITE (Accessible uniquement après clic) ---
-st.title("HARTUR // TERMINAL ACTIVÉ")
+# --- 2. LE SITE PRINCIPAL (VISIBLE APRÈS CLIC) ---
+st.title("HARTUR // TERMINAL OPÉRATIONNEL")
 st.markdown('<p class="signature-zac">Créé par zacmite</p>', unsafe_allow_html=True)
-
-if st.session_state.user is None:
-    tab1, tab2 = st.tabs(["CONNEXION", "INSCRIPTION"])
-    # ... suite du code de connexion ...
+st.chat_input("Le système est prêt...")
