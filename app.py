@@ -8,7 +8,6 @@ from datetime import datetime
 st.set_page_config(page_title="Hartur IA", layout="centered")
 
 # --- CONNEXION ---
-# Cette ligne gère toute la liaison avec ton Google Sheet
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def lire_donnees(onglet):
@@ -30,7 +29,6 @@ def demander_ia(prompt):
     key = st.secrets.get("MISTRAL_KEY")
     if not key:
         return "Clé API manquante dans les Secrets."
-    
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {key}"}
     data = {
@@ -41,59 +39,66 @@ def demander_ia(prompt):
         r = requests.post(url, headers=headers, json=data)
         return r.json()['choices'][0]['message']['content']
     except:
-        return "Hartur est indisponible pour le moment."
+        return "Hartur est indisponible."
 
-# --- INTERFACE ---
+# --- INTERFACE PRINCIPALE ---
 st.title("🤖 Hartur IA")
 
 if "user" not in st.session_state:
     st.session_state.user = None
 
+# --- AFFICHAGE SI NON CONNECTÉ (L'interface qui défile) ---
 if st.session_state.user is None:
-    choix = st.sidebar.selectbox("Menu", ["Connexion", "Inscription", "Admin"])
     
-    if choix == "Connexion":
-        p = st.text_input("Pseudo")
-        m = st.text_input("Mot de passe", type="password")
-        if st.button("Se connecter"):
-            df = lire_donnees("comptes")
-            if not df.empty and ((df['pseudo'] == p) & (df['password'] == str(m))).any():
-                st.session_state.user = p
-                st.rerun()
-            else:
-                st.error("Identifiants incorrects.")
+    # 1. SECTION CONNEXION
+    st.header("🔑 Se connecter")
+    p_co = st.text_input("Pseudo", key="p_co")
+    m_co = st.text_input("Mot de passe", type="password", key="m_co")
+    if st.button("Connexion"):
+        df = lire_donnees("comptes")
+        if not df.empty and ((df['pseudo'] == p_co) & (df['password'] == str(m_co))).any():
+            st.session_state.user = p_co
+            st.rerun()
+        else:
+            st.error("Identifiants incorrects.")
 
-    elif choix == "Inscription":
-        p = st.text_input("Nouveau pseudo")
-        m = st.text_input("Nouveau mot de passe", type="password")
-        if st.button("Créer mon compte"):
-            df = lire_donnees("comptes")
-            if not df.empty and p in df['pseudo'].values:
-                st.warning("Pseudo déjà utilisé.")
-            else:
-                nouveau = pd.DataFrame([{"pseudo": p, "password": str(m)}])
-                if ecrire_donnees("comptes", pd.concat([df, nouveau], ignore_index=True)):
-                    st.success("Compte créé ! Tu peux te connecter.")
+    st.divider() # Petite ligne de séparation
 
-    elif choix == "Admin":
-        code = st.text_input("Code Admin", type="password")
-        if code.lower() == "babar":
-            st.write("### Historique (Logs)")
-            st.dataframe(lire_donnees("logs"))
+    # 2. SECTION INSCRIPTION
+    st.header("📝 Inscription")
+    p_ins = st.text_input("Nouveau pseudo", key="p_ins")
+    m_ins = st.text_input("Nouveau mot de passe", type="password", key="m_ins")
+    if st.button("Créer un compte"):
+        df = lire_donnees("comptes")
+        if not df.empty and p_ins in df['pseudo'].values:
+            st.warning("Pseudo déjà utilisé.")
+        else:
+            nouveau = pd.DataFrame([{"pseudo": p_ins, "password": str(m_ins)}])
+            if ecrire_donnees("comptes", pd.concat([df, nouveau], ignore_index=True)):
+                st.success("Compte créé avec succès ! Connectez-vous en haut.")
 
+    st.divider()
+
+    # 3. SECTION ADMIN
+    st.header("🛡️ Admin")
+    code = st.text_input("Code secret", type="password", key="admin_code")
+    if code.lower() == "babar":
+        st.write("### Historique des Titans (Logs)")
+        st.dataframe(lire_donnees("logs"))
+
+# --- AFFICHAGE SI CONNECTÉ (Le Chat) ---
 else:
-    st.sidebar.write(f"Connecté : **{st.session_state.user}**")
-    if st.sidebar.button("Déconnexion"):
+    st.subheader(f"Connecté : {st.session_state.user}")
+    if st.button("Se déconnecter"):
         st.session_state.user = None
         st.rerun()
 
-    # Zone de Chat
     if "chat" not in st.session_state:
         st.session_state.chat = []
 
-    for m in st.session_state.chat:
-        with st.chat_message(m["role"]):
-            st.markdown(m["content"])
+    for msg in st.session_state.chat:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
 
     if p_input := st.chat_input("Parle à Hartur..."):
         st.session_state.chat.append({"role": "user", "content": p_input})
@@ -105,7 +110,7 @@ else:
         with st.chat_message("assistant"):
             st.markdown(rep)
         
-        # Enregistrement Log
+        # Enregistrement des Logs
         df_logs = lire_donnees("logs")
         nouveau_log = pd.DataFrame([{
             "date": datetime.now().strftime("%d/%m %H:%M"),
