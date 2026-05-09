@@ -1,19 +1,18 @@
 import streamlit as st
 
-# --- RESET CONFIG ---
-st.set_page_config(page_title="HARTUR | NEON SYSTEM", layout="wide")
+# --- CONFIGURATION ---
+st.set_page_config(page_title="HARTUR", layout="wide")
 
-# --- CSS : LE RETOUR DU NÉON ROUGE ---
+# --- LE STYLE NÉON (PROPRE & CENTRÉ) ---
 st.markdown("""
     <style>
-    /* Fond noir profond */
+    /* On cache tout le surplus de Streamlit pour ne pas avoir de scroll */
     .stApp { background-color: #05070a; }
     header {visibility: hidden;}
-    footer {visibility: hidden;}
     .main .block-container {padding: 0;}
 
-    /* Centrage vertical et horizontal sans scroll */
-    .viewport {
+    /* Conteneur pour verrouiller la fenêtre au milieu de l'écran */
+    .centrage-total {
         display: flex;
         align-items: center;
         justify-content: center;
@@ -21,102 +20,89 @@ st.markdown("""
         width: 100vw;
     }
 
-    /* La petite fenêtre carrée avec le liseré néon rouge */
-    .neon-square {
+    /* La petite fenêtre carrée avec le liseré rouge */
+    .boite-neon {
         background: #0d1117;
-        padding: 50px;
-        border: 3px solid #ff4b4b; /* Le fameux trait rouge */
-        border-radius: 20px;
-        box-shadow: 0 0 40px rgba(255, 75, 75, 0.6), inset 0 0 15px rgba(255, 75, 75, 0.2);
+        padding: 40px;
+        border: 2px solid #ff4b4b;
+        border-radius: 15px;
+        box-shadow: 0 0 25px rgba(255, 75, 75, 0.4);
         text-align: center;
-        width: 450px; /* Format carré compact */
+        width: 400px; /* Format petit carré */
     }
 
-    .title-neon {
-        font-size: 65px;
+    .titre {
+        font-size: 50px;
         font-weight: 900;
-        letter-spacing: 12px;
+        letter-spacing: 8px;
         color: white;
         margin: 0;
-        text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
     }
 
-    .author {
+    .signature {
         color: #58a6ff;
+        font-size: 14px;
         font-weight: bold;
-        font-size: 16px;
-        margin-top: 10px;
-        margin-bottom: 30px;
-        text-transform: uppercase;
-        letter-spacing: 3px;
+        margin-bottom: 25px;
     }
 
-    .future-text {
+    .description-futur {
         text-align: left;
         color: #e6edf3;
-        font-size: 18px;
-        line-height: 1.8;
-        margin-bottom: 40px;
-        padding-left: 20px;
+        font-size: 16px;
+        line-height: 1.6;
+        margin-bottom: 30px;
         border-left: 3px solid #ff4b4b;
+        padding-left: 15px;
     }
-    .future-text b { color: #ff4b4b; }
+    .description-futur b { color: #ff4b4b; }
 
-    /* Bouton LANCER HARTUR style rouge vibrant */
+    /* Bouton Lancer Hartur */
     div.stButton > button {
         width: 100% !important;
         background: #ff4b4b !important;
         color: white !important;
-        border: none !important;
-        padding: 20px !important;
-        font-size: 22px !important;
         font-weight: 900 !important;
-        border-radius: 12px !important;
-        box-shadow: 0 5px 15px rgba(255, 75, 75, 0.4) !important;
+        padding: 15px !important;
+        border-radius: 8px !important;
+        border: none !important;
         cursor: pointer;
-        transition: 0.4s;
-    }
-    div.stButton > button:hover {
-        background: #ff1f1f !important;
-        box-shadow: 0 0 30px rgba(255, 75, 75, 0.8) !important;
-        transform: scale(1.05);
+        text-transform: uppercase;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- NAVIGATION ---
-if "active" not in st.session_state:
-    st.session_state.active = False
+# --- LOGIQUE ---
+if "lance" not in st.session_state:
+    st.session_state.lance = False
 
-# --- 1. LA LANDING PAGE (SANS SCROLL) ---
-if not st.session_state.active:
-    st.markdown('<div class="viewport">', unsafe_allow_html=True)
-    st.markdown('<div class="neon-square">', unsafe_allow_html=True)
+# --- AFFICHAGE DE LA FENÊTRE ---
+if not st.session_state.lance:
+    st.markdown('<div class="centrage-total">', unsafe_allow_html=True)
+    st.markdown('<div class="boite-neon">', unsafe_allow_html=True)
     
-    # Titre et Signature
-    st.markdown('<h1 class="title-neon">HARTUR</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="author">Créé par zacmite</p>', unsafe_allow_html=True)
+    # Titre et Auteur
+    st.markdown('<div class="titre">HARTUR</div>', unsafe_allow_html=True)
+    st.markdown('<div class="signature">CRÉÉ PAR ZACMITE</div>', unsafe_allow_html=True)
     
     # Description "Claque"
     st.markdown("""
-        <div class="future-text">
-            ⚡ <b>Vitesse :</b> Réponses instantanées.<br>
-            ⚔️ <b>Filtre :</b> Zéro limite système.<br>
+        <div class="description-futur">
+            🚀 <b>Vitesse :</b> Réponses instantanées.<br>
+            ⚔️ <b>Filtre :</b> Aucune limite système.<br>
             🧠 <b>Force :</b> IA optimisée pour l'action.<br>
             🔥 <b>Style :</b> Le terminal du futur.
         </div>
     """, unsafe_allow_html=True)
     
-    # Bouton Lancer
-    if st.button("🚀 LANCER HARTUR"):
-        st.session_state.active = True
+    if st.button("LANCER HARTUR"):
+        st.session_state.lance = True
         st.rerun()
         
     st.markdown('</div></div>', unsafe_allow_html=True)
     st.stop()
 
-# --- 2. LE SITE ---
+# --- LE RESTE DU SITE ---
 else:
-    st.title("HARTUR // CONNECTÉ")
-    st.markdown('<p style="color:#58a6ff;">SYSTEM READY BY ZACMITE</p>', unsafe_allow_html=True)
-    st.chat_input("Initialisation terminée...")
+    st.title("HARTUR // TERMINAL")
+    st.chat_input("Pose ta question...")
