@@ -1,6 +1,3 @@
-# HARTUR — VERSION CORRIGÉE AVEC VRAIE IA
-
-```python
 import streamlit as st
 import pandas as pd
 import requests
@@ -10,7 +7,9 @@ from io import StringIO
 from openai import OpenAI
 
 # =====================================================
+
 # CONFIGURATION CORE
+
 # =====================================================
 
 REPO_NOM = "zachariepays-debug/Hartur-ia"
@@ -22,39 +21,46 @@ MASTER_CODE = "babar"
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # =====================================================
+
 # INITIALISATION SESSION
+
 # =====================================================
 
 if "user" not in st.session_state:
-    st.session_state.user = None
+st.session_state.user = None
 
 if "admin" not in st.session_state:
-    st.session_state.admin = False
+st.session_state.admin = False
 
 if "msgs" not in st.session_state:
-    st.session_state.msgs = []
+st.session_state.msgs = []
 
 if "theme" not in st.session_state:
-    st.session_state.theme = "Sombre"
+st.session_state.theme = "Sombre"
 
 # =====================================================
+
 # CONFIGURATION PAGE
+
 # =====================================================
 
 st.set_page_config(
-    page_title="HARTUR | OS",
-    layout="wide",
-    page_icon="💀"
+page_title="HARTUR | OS",
+layout="wide",
+page_icon="💀"
 )
 
 # =====================================================
+
 # THÈME DYNAMIQUE
+
 # =====================================================
 
 bg_color = "#030507" if st.session_state.theme == "Sombre" else "#f0f2f6"
 text_color = "#ffffff" if st.session_state.theme == "Sombre" else "#000000"
 
 st.markdown(f"""
+
 <style>
 .stApp {{
     background-color: {bg_color};
@@ -83,58 +89,65 @@ header {{
     letter-spacing: 5px;
 }}
 </style>
+
 """, unsafe_allow_html=True)
 
 # =====================================================
+
 # FONCTIONS GITHUB
+
 # =====================================================
 
 def github_action(chemin, methode="GET", contenu=None, sha=None):
 
-    url = f"https://api.github.com/repos/{REPO_NOM}/contents/{chemin}"
+```
+url = f"https://api.github.com/repos/{REPO_NOM}/contents/{chemin}"
 
-    headers = {
-        "Authorization": f"token {GITHUB_TOKEN}"
+headers = {
+    "Authorization": f"token {GITHUB_TOKEN}"
+}
+
+if methode == "GET":
+
+    r = requests.get(url, headers=headers)
+
+    if r.status_code == 200:
+        j = r.json()
+
+        contenu_decode = base64.b64decode(j['content']).decode('utf-8')
+
+        return contenu_decode, j['sha']
+
+    return None, None
+
+else:
+
+    data = {
+        "message": "Update HARTUR",
+        "content": base64.b64encode(
+            contenu.encode('utf-8')
+        ).decode('utf-8')
     }
 
-    if methode == "GET":
+    if sha:
+        data["sha"] = sha
 
-        r = requests.get(url, headers=headers)
+    r = requests.put(
+        url,
+        headers=headers,
+        data=json.dumps(data)
+    )
 
-        if r.status_code == 200:
-            j = r.json()
+    if r.status_code not in [200, 201]:
+        st.error(f"Erreur GitHub : {r.text}")
 
-            contenu_decode = base64.b64decode(j['content']).decode('utf-8')
-
-            return contenu_decode, j['sha']
-
-        return None, None
-
-    else:
-
-        data = {
-            "message": "Update HARTUR",
-            "content": base64.b64encode(
-                contenu.encode('utf-8')
-            ).decode('utf-8')
-        }
-
-        if sha:
-            data["sha"] = sha
-
-        r = requests.put(
-            url,
-            headers=headers,
-            data=json.dumps(data)
-        )
-
-        if r.status_code not in [200, 201]:
-            st.error(f"Erreur GitHub : {r.text}")
-
-        return r.json()
+    return r.json()
+```
 
 # =====================================================
+
 # IA HARTUR
+
 # =====================================================
 
 SYSTEM_PROMPT = """
@@ -160,401 +173,423 @@ Tu écris comme une IA futuriste premium.
 """
 
 # =====================================================
+
 # SIDEBAR
+
 # =====================================================
 
 with st.sidebar:
 
-    st.title("⚙️ RÉGLAGES")
+```
+st.title("⚙️ RÉGLAGES")
 
-    st.session_state.theme = st.selectbox(
-        "Style d'interface",
-        ["Sombre", "Clair"]
+st.session_state.theme = st.selectbox(
+    "Style d'interface",
+    ["Sombre", "Clair"]
+)
+
+st.divider()
+
+st.markdown("### 🔒 ACCÈS ADMIN")
+
+with st.expander("Se connecter au Core"):
+
+    code_input = st.text_input(
+        "Clé Maître",
+        type="password"
     )
 
-    st.divider()
-
-    st.markdown("### 🔒 ACCÈS ADMIN")
-
-    with st.expander("Se connecter au Core"):
-
-        code_input = st.text_input(
-            "Clé Maître",
-            type="password"
-        )
-
-        if code_input == MASTER_CODE:
-            st.session_state.admin = True
-            st.success("Mode God Activé")
+    if code_input == MASTER_CODE:
+        st.session_state.admin = True
+        st.success("Mode God Activé")
+```
 
 # =====================================================
+
 # MODE ADMIN
+
 # =====================================================
 
 if "hartur_off" not in st.session_state:
-    st.session_state.hartur_off = False
+st.session_state.hartur_off = False
 
 if st.session_state.admin:
 
-    st.title("🛠️ PANNEAU DE CONTRÔLE HARTUR")
+```
+st.title("🛠️ PANNEAU DE CONTRÔLE HARTUR")
 
-    admin_tab1, admin_tab2, admin_tab3 = st.tabs([
-        "📁 Discussions",
-        "🔐 Comptes",
-        "⚡ Core Control"
-    ])
+admin_tab1, admin_tab2, admin_tab3 = st.tabs([
+    "📁 Discussions",
+    "🔐 Comptes",
+    "⚡ Core Control"
+])
 
-    # =========================================
-    # DISCUSSIONS UTILISATEURS
-    # =========================================
+# =========================================
+# DISCUSSIONS UTILISATEURS
+# =========================================
 
-    with admin_tab1:
+with admin_tab1:
 
-        st.subheader("📡 Conversations Globales")
+    st.subheader("📡 Conversations Globales")
 
-        try:
+    try:
 
-            api_url = f"https://api.github.com/repos/{REPO_NOM}/contents/users"
+        api_url = f"https://api.github.com/repos/{REPO_NOM}/contents/users"
 
-            headers = {
-                "Authorization": f"token {GITHUB_TOKEN}"
-            }
+        headers = {
+            "Authorization": f"token {GITHUB_TOKEN}"
+        }
 
-            r = requests.get(api_url, headers=headers)
+        r = requests.get(api_url, headers=headers)
 
-            if r.status_code == 200:
+        if r.status_code == 200:
 
-                fichiers = r.json()
+            fichiers = r.json()
 
-                utilisateurs = []
+            utilisateurs = []
 
-                for f in fichiers:
+            for f in fichiers:
 
-                    if f['name'].endswith('.json'):
+                if f['name'].endswith('.json'):
 
-                        nom_user = f['name'].replace('.json', '')
+                    nom_user = f['name'].replace('.json', '')
 
-                        chat_raw, _ = github_action(f"users/{f['name']}")
+                    chat_raw, _ = github_action(f"users/{f['name']}")
 
-                        if chat_raw:
+                    if chat_raw:
 
-                            msgs = json.loads(chat_raw)
+                        msgs = json.loads(chat_raw)
 
-                            dernier = "Aucun message"
+                        dernier = "Aucun message"
 
-                            if len(msgs) > 0:
-                                dernier = msgs[-1]['content'][:80]
+                        if len(msgs) > 0:
+                            dernier = msgs[-1]['content'][:80]
 
-                            utilisateurs.append({
-                                "nom": nom_user,
-                                "dernier": dernier,
-                                "messages": msgs
-                            })
+                        utilisateurs.append({
+                            "nom": nom_user,
+                            "dernier": dernier,
+                            "messages": msgs
+                        })
 
-                if utilisateurs:
+            if utilisateurs:
 
-                    noms = [u['nom'] for u in utilisateurs]
+                noms = [u['nom'] for u in utilisateurs]
 
-                    choix = st.selectbox(
-                        "Sélectionner un utilisateur",
-                        noms
+                choix = st.selectbox(
+                    "Sélectionner un utilisateur",
+                    noms
+                )
+
+                data_user = next(
+                    u for u in utilisateurs
+                    if u['nom'] == choix
+                )
+
+                st.markdown(f"### 👤 {choix}")
+                st.info(f"🧠 Dernier message : {data_user['dernier']}")
+
+                historique_txt = ""
+
+                messages_inverses = list(reversed(data_user['messages']))
+
+                for m in messages_inverses:
+
+                    role = "🧑 USER" if m['role'] == 'user' else "🤖 HARTUR"
+
+                    st.markdown(
+                        f"**{role}** : {m['content']}"
                     )
 
-                    data_user = next(
-                        u for u in utilisateurs
-                        if u['nom'] == choix
-                    )
+                    historique_txt += f"{role}: {m['content']}
+```
 
-                    st.markdown(f"### 👤 {choix}")
-                    st.info(f"🧠 Dernier message : {data_user['dernier']}")
+"
 
-                    historique_txt = ""
+```
+                st.download_button(
+                    "⬇️ Télécharger la conversation",
+                    historique_txt,
+                    file_name=f"conversation_{choix}.txt"
+                )
 
-                    messages_inverses = list(reversed(data_user['messages']))
+    except Exception as e:
+        st.error(f"Erreur admin : {e}")
 
-                    for m in messages_inverses:
+# =========================================
+# COMPTES UTILISATEURS
+# =========================================
 
-                        role = "🧑 USER" if m['role'] == 'user' else "🤖 HARTUR"
+with admin_tab2:
 
-                        st.markdown(
-                            f"**{role}** : {m['content']}"
-                        )
+    st.subheader("🔐 Base des Comptes")
 
-                        historique_txt += f"{role}: {m['content']}\n\n"
+    raw, _ = github_action(FICHIER_COMPTES)
 
-                    st.download_button(
-                        "⬇️ Télécharger la conversation",
-                        historique_txt,
-                        file_name=f"conversation_{choix}.txt"
-                    )
+    if raw:
 
-        except Exception as e:
-            st.error(f"Erreur admin : {e}")
+        lignes = raw.splitlines()
 
-    # =========================================
-    # COMPTES UTILISATEURS
-    # =========================================
+        for ligne in lignes:
 
-    with admin_tab2:
+            data = ligne.split(",")
 
-        st.subheader("🔐 Base des Comptes")
+            if len(data) >= 2:
 
-        raw, _ = github_action(FICHIER_COMPTES)
+                st.code(
+                    f"Utilisateur : {data[0]} | Mot de passe : {data[1]}"
+                )
 
-        if raw:
+# =========================================
+# CORE CONTROL
+# =========================================
 
-            lignes = raw.splitlines()
+with admin_tab3:
 
-            for ligne in lignes:
+    st.subheader("⚡ Contrôle Total")
 
-                data = ligne.split(",")
+    if st.button("🛑 ÉTEINDRE HARTUR"):
+        st.session_state.hartur_off = True
+        st.rerun()
 
-                if len(data) >= 2:
-
-                    st.code(
-                        f"Utilisateur : {data[0]} | Mot de passe : {data[1]}"
-                    )
-
-    # =========================================
-    # CORE CONTROL
-    # =========================================
-
-    with admin_tab3:
-
-        st.subheader("⚡ Contrôle Total")
-
-        if st.button("🛑 ÉTEINDRE HARTUR"):
-            st.session_state.hartur_off = True
-            st.rerun()
-
-        if st.button("🚪 DÉCONNEXION ADMIN"):
-            st.session_state.admin = False
-            st.rerun()
+    if st.button("🚪 DÉCONNEXION ADMIN"):
+        st.session_state.admin = False
+        st.rerun()
+```
 
 # =====================================================
+
 # MODE HARTUR OFF
+
 # =====================================================
 
 elif st.session_state.hartur_off:
 
-    st.markdown(
-        """
-        <style>
-        .stApp {
-            background-color: black;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+```
+st.markdown(
+    """
+    <style>
+    .stApp {
+        background-color: black;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
-    st.markdown(
-        """
-        <h1 style='text-align:center;color:red;margin-top:20%;'>
-        🔒 HARTUR CORE OFFLINE
-        </h1>
-        <p style='text-align:center;color:white;'>
-        Réouvrir HARTUR
-        </p>
-        """,
-        unsafe_allow_html=True
-    )
+st.markdown(
+    """
+    <h1 style='text-align:center;color:red;margin-top:20%;'>
+    🔒 HARTUR CORE OFFLINE
+    </h1>
+    <p style='text-align:center;color:white;'>
+    Réouvrir HARTUR
+    </p>
+    """,
+    unsafe_allow_html=True
+)
 
-    code_reboot = st.text_input(
-        "Code de réactivation",
-        type="password"
-    )
+code_reboot = st.text_input(
+    "Code de réactivation",
+    type="password"
+)
 
-    if code_reboot == MASTER_CODE:
-        st.session_state.hartur_off = False
-        st.success("HARTUR relancé")
-        st.rerun()
+if code_reboot == MASTER_CODE:
+    st.session_state.hartur_off = False
+    st.success("HARTUR relancé")
+    st.rerun()
+```
 
 # =====================================================
+
 # ESPACE CHAT
+
 # =====================================================
 
 elif st.session_state.user:
 
-    st.markdown(
-        '<h2 style="text-align:center;">HARTUR</h2>',
-        unsafe_allow_html=True
-    )
+```
+st.markdown(
+    '<h2 style="text-align:center;">HARTUR</h2>',
+    unsafe_allow_html=True
+)
 
-    # Affichage historique
-    for m in st.session_state.msgs:
+# Affichage historique
+for m in st.session_state.msgs:
 
-        with st.chat_message(m["role"]):
-            st.write(m["content"])
+    with st.chat_message(m["role"]):
+        st.write(m["content"])
 
-    # Zone utilisateur
-    if prompt := st.chat_input("Parle avec HARTUR..."):
+# Zone utilisateur
+if prompt := st.chat_input("Parle avec HARTUR..."):
 
-        # Message utilisateur
-        st.session_state.msgs.append({
-            "role": "user",
-            "content": prompt
-        })
+    # Message utilisateur
+    st.session_state.msgs.append({
+        "role": "user",
+        "content": prompt
+    })
 
-        with st.chat_message("user"):
-            st.write(prompt)
+    with st.chat_message("user"):
+        st.write(prompt)
 
-        # Réponse IA
-        with st.chat_message("assistant"):
+    # Réponse IA
+    with st.chat_message("assistant"):
 
-            try:
+        try:
 
-                messages = [
-                    {
-                        "role": "system",
-                        "content": SYSTEM_PROMPT
-                    }
-                ]
+            messages = [
+                {
+                    "role": "system",
+                    "content": SYSTEM_PROMPT
+                }
+            ]
 
-                # Limite mémoire
-                MAX_MSGS = 20
-                historique = st.session_state.msgs[-MAX_MSGS:]
+            # Limite mémoire
+            MAX_MSGS = 20
+            historique = st.session_state.msgs[-MAX_MSGS:]
 
-                messages.extend(historique)
+            messages.extend(historique)
 
-                response = client.chat.completions.create(
-                    model="gpt-4.1-mini",
-                    messages=messages,
-                    temperature=0.9
-                )
+            response = client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=messages,
+                temperature=0.9
+            )
 
-                reponse = response.choices[0].message.content
+            reponse = response.choices[0].message.content
 
-                st.write(reponse)
+            st.write(reponse)
 
-                st.session_state.msgs.append({
-                    "role": "assistant",
-                    "content": reponse
-                })
+            st.session_state.msgs.append({
+                "role": "assistant",
+                "content": reponse
+            })
 
-                # =====================================
-                # SAUVEGARDE UTILISATEUR
-                # =====================================
+            # =====================================
+            # SAUVEGARDE UTILISATEUR
+            # =====================================
 
-                fichier_user = f"users/{st.session_state.user}.json"
+            fichier_user = f"users/{st.session_state.user}.json"
 
-                ancien, sha = github_action(fichier_user)
+            ancien, sha = github_action(fichier_user)
 
-                github_action(
-                    fichier_user,
-                    "PUT",
-                    json.dumps(st.session_state.msgs),
-                    sha
-                )
+            github_action(
+                fichier_user,
+                "PUT",
+                json.dumps(st.session_state.msgs),
+                sha
+            )
 
-            except Exception as e:
-                st.error(f"Erreur IA : {e}")
+        except Exception as e:
+            st.error(f"Erreur IA : {e}")
+```
 
 # =====================================================
+
 # PAGE D'ACCUEIL
+
 # =====================================================
 
 else:
 
-    st.markdown(
-        '<h1 class="giant-title">HARTUR</h1>',
-        unsafe_allow_html=True
-    )
+```
+st.markdown(
+    '<h1 class="giant-title">HARTUR</h1>',
+    unsafe_allow_html=True
+)
 
-    st.markdown(
-        '<p class="signature-zac">CRÉÉ PAR ZACMITE</p>',
-        unsafe_allow_html=True
-    )
+st.markdown(
+    '<p class="signature-zac">CRÉÉ PAR ZACMITE</p>',
+    unsafe_allow_html=True
+)
 
-    col_l, col_m, col_r = st.columns([1, 1.8, 1])
+col_l, col_m, col_r = st.columns([1, 1.8, 1])
 
-    with col_m:
+with col_m:
 
-        tab1, tab2 = st.tabs([
-            "CONNEXION",
-            "REJOINDRE"
-        ])
+    tab1, tab2 = st.tabs([
+        "CONNEXION",
+        "REJOINDRE"
+    ])
 
-        # =========================================
-        # CONNEXION
-        # =========================================
+    # =========================================
+    # CONNEXION
+    # =========================================
 
-        with tab1:
+    with tab1:
 
-            u = st.text_input("Pseudo")
-            p = st.text_input("Clé", type="password")
+        u = st.text_input("Pseudo")
+        p = st.text_input("Clé", type="password")
 
-            if st.button("ENTRER"):
+        if st.button("ENTRER"):
 
-                raw, _ = github_action(FICHIER_COMPTES)
+            raw, _ = github_action(FICHIER_COMPTES)
 
-                if raw:
+            if raw:
 
-                    lignes = raw.splitlines()
+                lignes = raw.splitlines()
 
-                    valide = False
+                valide = False
 
-                    for ligne in lignes:
+                for ligne in lignes:
 
-                        data = ligne.split(",")
+                    data = ligne.split(",")
 
-                        if len(data) >= 2:
+                    if len(data) >= 2:
 
-                            user_csv = data[0]
-                            pass_csv = data[1]
+                        user_csv = data[0]
+                        pass_csv = data[1]
 
-                            if u == user_csv and p == pass_csv:
-                                valide = True
-                                break
+                        if u == user_csv and p == pass_csv:
+                            valide = True
+                            break
 
-                    if valide:
+                if valide:
 
-                        st.session_state.user = u
+                    st.session_state.user = u
 
-                        # Chargement historique
-                        fichier_user = f"users/{u}.json"
+                    # Chargement historique
+                    fichier_user = f"users/{u}.json"
 
-                        ancien_chat, _ = github_action(fichier_user)
+                    ancien_chat, _ = github_action(fichier_user)
 
-                        if ancien_chat:
-                            st.session_state.msgs = json.loads(ancien_chat)
+                    if ancien_chat:
+                        st.session_state.msgs = json.loads(ancien_chat)
 
-                        st.success("Connexion réussie")
-                        st.rerun()
+                    st.success("Connexion réussie")
+                    st.rerun()
 
-                    else:
-                        st.error("Pseudo ou mot de passe incorrect")
+                else:
+                    st.error("Pseudo ou mot de passe incorrect")
 
-        # =========================================
-        # INSCRIPTION
-        # =========================================
+    # =========================================
+    # INSCRIPTION
+    # =========================================
 
-        with tab2:
+    with tab2:
 
-            new_user = st.text_input("Nouveau pseudo")
-            new_pass = st.text_input(
-                "Nouveau mot de passe",
-                type="password"
+        new_user = st.text_input("Nouveau pseudo")
+        new_pass = st.text_input(
+            "Nouveau mot de passe",
+            type="password"
+        )
+
+        if st.button("CRÉER UN COMPTE"):
+
+            raw, sha = github_action(FICHIER_COMPTES)
+
+            if raw:
+                contenu = raw + f"\n{new_user},{new_pass}"
+            else:
+                contenu = f"{new_user},{new_pass}"
+
+            github_action(
+                FICHIER_COMPTES,
+                "PUT",
+                contenu,
+                sha
             )
 
-            if st.button("CRÉER UN COMPTE"):
-
-                raw, sha = github_action(FICHIER_COMPTES)
-
-                if raw:
-                    contenu = raw + f"\n{new_user},{new_pass}"
-                else:
-                    contenu = f"{new_user},{new_pass}"
-
-                github_action(
-                    FICHIER_COMPTES,
-                    "PUT",
-                    contenu,
-                    sha
-                )
-
-                st.success("Compte créé avec succès")
-
+            st.success("Compte créé avec succès")
 ```
 
 # IMPORTANT
