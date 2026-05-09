@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import base64
 import json
+import time
 from io import StringIO
 
 # --- CONFIGURATION ---
@@ -13,7 +14,15 @@ FICHIER_COMPTES = "comptes.csv"
 MISTRAL_API_KEY = st.secrets["MISTRAL_KEY"]
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
 
-st.set_page_config(page_title="Hartur", layout="wide") 
+st.set_page_config(page_title="Hartur", layout="wide")
+
+# --- STYLE CSS ---
+st.markdown("""
+    <style>
+    .admin-btn { text-align: right; }
+    .stChatMessage { border-radius: 15px; }
+    </style>
+    """, unsafe_allow_stdio=True)
 
 # --- FONCTIONS GITHUB ---
 def lire_csv_github(nom_fichier):
@@ -34,107 +43,114 @@ def ecrire_csv_github(nom_fichier, df, sha):
     data = {"message": "Update Hartur", "content": encoded, "sha": sha}
     requests.put(url, data=json.dumps(data), headers=headers)
 
-# --- FONCTION IA (NETTOYAGE COMPLET) ---
+# --- FONCTION IA ---
 def parler_a_ia(prompt, historique):
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}", "Content-Type": "application/json"}
-    
-    # On enlève tout le blabla inutile ici
     system_msg = (
-        "Tu es Hartur, un pote direct et cool conçu par Zacharie pays. "
-        "INTERDICTION de parler de bière, de foot, de télé ou de frigo. "
-        "Ne dis 'Zacharie pays' QUE si on te demande 'qui t'a créé ?'. "
-        "Réponds de manière brève et naturelle, comme un SMS entre potes."
+        "Tu es Hartur, un pote cool conçu par Zacharie pays. "
+        "Pas de bière, pas de frigo. Réponds court et direct."
     )
-    
     messages = [{"role": "system", "content": system_msg}]
     for m in historique[-5:]:
         messages.append({"role": m["role"], "content": m["content"]})
     messages.append({"role": "user", "content": prompt})
-    
     try:
         response = requests.post(url, json={"model": "open-mistral-7b", "messages": messages}, headers=headers)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Bug de connexion, réessaie gros."
+        return "Petit souci technique, réessaie."
 
-# --- LOGIQUE ---
-if "user" not in st.session_state:
-    st.session_state.user = None
-if "view" not in st.session_state:
-    st.session_state.view = "chat"
+# --- INITIALISATION ---
+if "user" not in st.session_state: st.session_state.user = None
+if "view" not in st.session_state: st.session_state.view = "chat"
 
-if st.session_state.user is None:
-    st.title("🤖 Hartur")
-    onglet_co, onglet_ins = st.tabs(["Connexion", "Inscription"])
-    with onglet_co:
-        p = st.text_input("Pseudo", key="lp")
-        m = st.text_input("Pass", type="password", key="lm")
-        if st.button("Go"):
-            df_c, _ = lire_csv_github(FICHIER_COMPTES)
-            if not df_c.empty and ((df_c['pseudo'].astype(str) == str(p)) & (df_c['password'].astype(str) == str(m))).any():
-                st.session_state.user = p
+# --- BARRE DE NAVIGATION HAUTE (ADMIN) ---
+col_titre, col_admin = st.columns([0.9, 0.1])
+with col_admin:
+    if st.button("🔐 Admin"):
+        st.session_state.view = "admin_auth"
+
+# --- LOGIQUE D'AFFICHAGE ---
+
+# 1. AUTHENTIFICATION ADMIN
+if st.session_state.view == "admin_auth":
+    st.title("Accès Restreint")
+    code = st.text_input("Code secret", type="password")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Valider"):
+            if code == "1234":
+                st.session_state.view = "admin_panel"
                 st.rerun()
-    with onglet_ins:
-        pi = st.text_input("Nouveau Pseudo", key="ip").strip()
-        mi = st.text_input("Nouveau Pass", type="password", key="im")
-        if st.button("Créer"):
-            df_c, sha_c = lire_csv_github(FICHIER_COMPTES)
-            if pi.lower() in df_c['pseudo'].astype(str).str.lower().values:
-                st.error("Déjà pris.")
-            elif pi and mi:
-                df_c = pd.concat([df_c, pd.DataFrame([{"pseudo": pi, "password": mi}])], ignore_index=True)
-                ecrire_csv_github(FICHIER_COMPTES, df_c, sha_c)
-                st.success("Compte OK !")
+            else: st.error("Code faux.")
+    with col2:
+        if st.button("Retour"):
+            st.session_state.view = "chat"
+            st.rerun()
 
+# 2. PANNEAU ADMIN
+elif st.session_state.view == "admin_panel":
+    st.title("🛡️ Dashboard Admin")
+    if st.button("⬅️ Retour au Chat"):
+        st.session_state.view = "chat"
+        st.rerun()
+    
+    df_glob, _ = lire_csv_github(FICHIER_HIST)
+    df_c, _ = lire_csv_github(FICHIER_COMPTES)
+    
+    st.metric("Utilisateurs", len(df_c))
+    
+    st.subheader("Dernières activités")
+    for u in df_glob['pseudo'].unique():
+        last = df_glob[df_glob['pseudo'] == u].tail(2)
+        with st.expander(f"Discussion de {u}"):
+            for _, r in last.iterrows():
+                st.write(f"**{r['role']}**: {r['content']}")
+
+# 3. CONNEXION / INSCRIPTION USER
+elif st.session_state.user is None:
+    st.title("🤖 Bienvenue sur Hartur")
+    t1, t2 = st.tabs(["Se connecter", "S'inscrire"])
+    with t1:
+        u = st.text_input("Pseudo", key="u1")
+        p = st.text_input("Pass", type="password", key="p1")
+        if st.button("Connexion"):
+            df_c, _ = lire_csv_github(FICHIER_COMPTES)
+            if not df_c.empty and ((df_c['pseudo'].astype(str) == u) & (df_c['password'].astype(str) == p)).any():
+                st.session_state.user = u
+                st.rerun()
+    with t2:
+        ui = st.text_input("Ton nom", key="u2")
+        pi = st.text_input("Ton pass", type="password", key="p2")
+        if st.button("Créer compte"):
+            df_c, sha_c = lire_csv_github(FICHIER_COMPTES)
+            if ui.lower() in df_c['pseudo'].astype(str).str.lower().values: st.error("Déjà pris.")
+            elif ui and pi:
+                df_c = pd.concat([df_c, pd.DataFrame([{"pseudo": ui, "password": pi}])], ignore_index=True)
+                ecrire_csv_github(FICHIER_COMPTES, df_c, sha_c)
+                st.success("Compte créé !")
+
+# 4. CHAT PRINCIPAL
 else:
+    st.title(f"Salut {st.session_state.user}")
     df_glob, sha_glob = lire_csv_github(FICHIER_HIST)
     
-    with st.sidebar:
-        if st.button("💬 Chat"): st.session_state.view = "chat"; st.rerun()
-        st.divider()
-        if st.text_input("Admin", type="password") == "1234":
-            if st.button("📊 Dashboard"): st.session_state.view = "admin"; st.rerun()
-        st.divider()
-        if st.button("Quitter"): st.session_state.user = None; st.rerun()
-
-    # --- PAGE ADMIN (MISE À JOUR) ---
-    if st.session_state.view == "admin":
-        st.title("🛡️ Dashboard Admin")
+    # Historique
+    hist = df_glob[df_glob['pseudo'] == st.session_state.user].to_dict('records')
+    for m in hist:
+        with st.chat_message(m["role"]): st.write(m["content"])
+    
+    # Input
+    prompt = st.chat_input("Dis-moi tout...")
+    if prompt:
+        with st.chat_message("user"): st.write(prompt)
+        df_glob = pd.concat([df_glob, pd.DataFrame([{"pseudo": st.session_state.user, "role": "user", "content": prompt}])], ignore_index=True)
+        ecrire_csv_github(FICHIER_HIST, df_glob, sha_glob)
         
-        st.subheader("⚡ Derniers échanges par utilisateur")
-        if not df_glob.empty:
-            # On regroupe par utilisateur et on prend les deux derniers messages (User + IA)
-            for user in df_glob['pseudo'].unique():
-                df_u = df_glob[df_glob['pseudo'] == user].tail(2)
-                with st.expander(f"Dernière activité de {user}"):
-                    for _, row in df_u.iterrows():
-                        label = f"👤 {user}" if row['role'] == 'user' else "🤖 Hartur"
-                        st.write(f"**{label}** : {row['content']}")
+        rep = parler_a_ia(prompt, hist)
+        with st.chat_message("assistant"): st.write(rep)
         
-        st.divider()
-        u_choisi = st.selectbox("Dossier complet :", ["..."] + df_glob['pseudo'].unique().tolist())
-        if u_choisi != "...":
-            df_p = df_glob[df_glob['pseudo'] == u_choisi]
-            for _, r in df_p.iloc[::-1].iterrows():
-                if r['role'] == 'user': st.info(f"**{u_choisi}** : {r['content']}")
-                else: st.success(f"**Hartur** : {r['content']}")
-
-    # --- PAGE CHAT ---
-    else:
-        st.title("Chat")
-        hist = df_glob[df_glob['pseudo'] == st.session_state.user].to_dict('records')
-        for m in hist:
-            with st.chat_message(m["role"]): st.write(m["content"])
-        
-        p = st.chat_input("Dis-moi...")
-        if p:
-            with st.chat_message("user"): st.write(p)
-            df_glob = pd.concat([df_glob, pd.DataFrame([{"pseudo": st.session_state.user, "role": "user", "content": p}])], ignore_index=True)
-            ecrire_csv_github(FICHIER_HIST, df_glob, sha_glob)
-            
-            r = parler_a_ia(p, hist)
-            with st.chat_message("assistant"): st.write(r)
-            _, sha_n = lire_csv_github(FICHIER_HIST)
-            df_glob = pd.concat([df_glob, pd.DataFrame([{"pseudo": st.session_state.user, "role": "assistant", "content": r}])], ignore_index=True)
-            ecrire_csv_github(FICHIER_HIST, df_glob, sha_n)
+        _, sha_n = lire_csv_github(FICHIER_HIST)
+        df_glob = pd.concat([df_glob, pd.DataFrame([{"pseudo": st.session_state.user, "role": "assistant", "content": rep}])], ignore_index=True)
+        ecrire_csv_github(FICHIER_HIST, df_glob, sha_n)
