@@ -34,21 +34,30 @@ def ecrire_csv_github(nom_fichier, df, sha):
     data = {"message": "Update Hartur", "content": encoded, "sha": sha}
     requests.put(url, data=json.dumps(data), headers=headers)
 
-# --- FONCTION IA ---
+# --- FONCTION IA (TON POTE HARTUR AVEC SA NOUVELLE MÉMOIRE) ---
 def parler_a_ia(prompt, historique):
     url = "https://api.mistral.ai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {MISTRAL_API_KEY}", "Content-Type": "application/json"}
-    system_msg = "Tu es Hartur, un pote direct et sans filtre."
+    
+    # INSTRUCTION CRÉATEUR : On lui dit clairement qui est le patron
+    system_msg = (
+        "Tu es Hartur, un pote de confiance, très proche. "
+        "Ton créateur (celui qui t'a conçu) est Zacharie pays. "
+        "Si on te demande qui t'a créé ou conçu, réponds avec fierté que c'est Zacharie pays. "
+        "Parle comme un pote normal, pas de daron, pas de clichés. Sois direct, un peu street, "
+        "et toujours là pour ton utilisateur."
+    )
+    
     messages = [{"role": "system", "content": system_msg}]
     for m in historique[-4:]:
         messages.append({"role": m["role"], "content": m["content"]})
     messages.append({"role": "user", "content": prompt})
     
     try:
-        response = requests.post(url, json={"model": "mistral-small-latest", "messages": messages}, headers=headers)
+        response = requests.post(url, json={"model": "open-mistral-7b", "messages": messages}, headers=headers)
         return response.json()['choices'][0]['message']['content']
     except:
-        return "Petit bug technique sur l'IA, réessaie."
+        return "Désolé gros, j'ai un bug technique."
 
 # --- CONNEXION ---
 if "user" not in st.session_state:
@@ -66,64 +75,60 @@ if st.session_state.user is None:
         else:
             st.error("Pseudo ou mot de passe faux.")
 else:
-    # Charger les données
     df_glob, sha_glob = lire_csv_github(FICHIER_HIST)
     
-    # --- BARRE LATÉRALE (TON COIN ADMIN) ---
     with st.sidebar:
-        st.write(f"Utilisateur : **{st.session_state.user}**")
+        st.write(f"Connecté : **{st.session_state.user}**")
         if st.button("Déconnexion"):
             st.session_state.user = None
             st.rerun()
         
         st.divider()
-        
-        # --- SECTION ADMIN ---
         with st.expander("🛡️ Panneau Admin"):
             if st.text_input("Code Secret", type="password") == "1234":
-                st.subheader("📁 Dossiers par personne")
-                
-                # Liste des pseudos uniques (tes "dossiers")
+                st.subheader("📁 Dossiers par utilisateur")
                 liste_users = df_glob['pseudo'].unique().tolist()
-                user_choisi = st.selectbox("Choisir un dossier", ["Sélectionner..."] + liste_users)
+                user_choisi = st.selectbox("Sélectionner un utilisateur", ["..."] + liste_users)
                 
-                if user_choisi != "Sélectionner...":
-                    st.write(f"### Conversations de {user_choisi}")
-                    # On filtre et on inverse (plus récent en haut)
-                    df_perso = df_glob[df_glob['pseudo'] == user_choisi].iloc[::-1]
-                    st.table(df_perso[['role', 'content']])
+                if user_choisi != "...":
+                    st.write(f"### Historique de {user_choisi}")
+                    df_perso = df_glob[df_glob['pseudo'] == user_choisi].copy()
+                    df_perso['Qui ?'] = df_perso['role'].apply(lambda x: user_choisi if x == 'user' else 'Hartur')
+                    
+                    txt_output = f"CONVERSATION DE {user_choisi.upper()}\n" + "="*30 + "\n\n"
+                    for _, row in df_perso.iterrows():
+                        nom = user_choisi if row['role'] == 'user' else 'Hartur'
+                        txt_output += f"[{nom}]: {row['content']}\n\n"
+                    
+                    st.download_button(label="📥 Télécharger (.txt)", data=txt_output, file_name=f"chat_{user_choisi}.txt", mime="text/plain")
+                    st.table(df_perso[['Qui ?', 'content']].iloc[::-1])
                 
                 st.divider()
-                st.subheader("🌍 Historique Global")
-                # Tout le monde réuni, du plus récent au plus ancien
-                st.write("Toutes les discussions (récent en haut) :")
+                st.subheader("🌍 Vue Globale")
                 st.dataframe(df_glob.iloc[::-1])
 
-    # --- CHAT INTERFACE ---
+    # --- CHAT ---
     st.title("Discussion")
-    user_hist = df_glob[df_glob['pseudo'] == st.session_state.user].to_dict('records')
+    user_hist_df = df_glob[df_glob['pseudo'] == st.session_state.user]
+    user_hist_list = user_hist_df.to_dict('records')
 
-    # Affichage des messages existants
-    for msg in user_hist:
+    for msg in user_hist_list:
         with st.chat_message(msg["role"]):
             st.write(msg["content"])
 
-    prompt = st.chat_input("Dis-moi tout...")
+    prompt = st.chat_input("Dis-moi ce que t'as sur le cœur...")
     if prompt:
         with st.chat_message("user"):
             st.write(prompt)
         
-        # Sauvegarde utilisateur
         new_row = pd.DataFrame([{"pseudo": st.session_state.user, "role": "user", "content": prompt}])
         df_glob = pd.concat([df_glob, new_row], ignore_index=True)
         ecrire_csv_github(FICHIER_HIST, df_glob, sha_glob)
         
-        # Réponse IA
-        reponse = parler_a_ia(prompt, user_hist)
+        reponse = parler_a_ia(prompt, user_hist_list)
         with st.chat_message("assistant"):
             st.write(reponse)
             
-        # Sauvegarde réponse IA
         _, sha_neuf = lire_csv_github(FICHIER_HIST)
         new_ia_row = pd.DataFrame([{"pseudo": st.session_state.user, "role": "assistant", "content": reponse}])
         df_glob = pd.concat([df_glob, new_ia_row], ignore_index=True)
